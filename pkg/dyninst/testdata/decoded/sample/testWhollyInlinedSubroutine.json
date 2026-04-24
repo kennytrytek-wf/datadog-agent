@@ -79,7 +79,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "testWhollyInlinedSubroutine",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   },
@@ -145,13 +144,7 @@
               }
             }
           }
-        },
-        "evaluationErrors": [
-          {
-            "expr": "@duration",
-            "message": "not available: function was inlined"
-          }
-        ]
+        }
       },
       "type": "snapshot"
     },
@@ -221,13 +214,7 @@
               }
             }
           }
-        },
-        "evaluationErrors": [
-          {
-            "expr": "@duration",
-            "message": "not available: function was inlined"
-          }
-        ]
+        }
       },
       "type": "snapshot"
     },

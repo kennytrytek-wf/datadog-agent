@@ -56,7 +56,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "testInlinedBC",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   }

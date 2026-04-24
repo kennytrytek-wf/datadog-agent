@@ -83,7 +83,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "r1={unavailable}",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   }

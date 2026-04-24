@@ -89,7 +89,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "p={X: 1, Y: 2}",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   },
@@ -175,7 +174,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "p={Name: tiny}",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   },
@@ -251,7 +249,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "p=42",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   }

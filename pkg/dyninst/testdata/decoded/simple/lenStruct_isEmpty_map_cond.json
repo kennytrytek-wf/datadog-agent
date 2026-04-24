@@ -30,7 +30,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "tag=miss",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   }

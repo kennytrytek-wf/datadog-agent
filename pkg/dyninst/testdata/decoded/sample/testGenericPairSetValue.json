@@ -79,7 +79,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "k=key",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   },
@@ -163,7 +162,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "k=1",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   }

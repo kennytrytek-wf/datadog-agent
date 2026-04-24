@@ -24,7 +24,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "s[1]: 2",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   }

@@ -51,13 +51,7 @@
               }
             }
           }
-        },
-        "evaluationErrors": [
-          {
-            "expr": "@duration",
-            "message": "not available: function was inlined"
-          }
-        ]
+        }
       },
       "type": "snapshot"
     },
@@ -126,7 +120,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   }
 ]

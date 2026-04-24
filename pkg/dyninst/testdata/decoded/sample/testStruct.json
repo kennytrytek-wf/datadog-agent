@@ -87,7 +87,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "{aBool: true, aString: one, aNumber: 2, nested: {anotherInt: 3, anotherString: four}}",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   }

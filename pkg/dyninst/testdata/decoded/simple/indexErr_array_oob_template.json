@@ -24,7 +24,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "s[3]: {error: index 3 out of bounds for array of length 3}",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   }

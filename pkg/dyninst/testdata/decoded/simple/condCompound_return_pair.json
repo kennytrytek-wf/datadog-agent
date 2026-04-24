@@ -24,7 +24,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "@return.r0 == 2 && @return.r1 == \"ok\" [r0=2, r1=ok]",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   }

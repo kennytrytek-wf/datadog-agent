@@ -81,7 +81,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "testReturnsMixed",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   }

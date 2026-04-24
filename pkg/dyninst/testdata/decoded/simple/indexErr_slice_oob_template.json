@@ -30,7 +30,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "s[5]: {error: index out of bounds}",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   }

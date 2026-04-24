@@ -126,7 +126,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "testReturnsManyFloats",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   }

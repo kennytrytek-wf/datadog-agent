@@ -78,7 +78,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "value=generics work",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   },
@@ -161,7 +160,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "value=21",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   }

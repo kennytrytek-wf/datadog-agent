@@ -67,7 +67,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "testReturnsArrayOne",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   }

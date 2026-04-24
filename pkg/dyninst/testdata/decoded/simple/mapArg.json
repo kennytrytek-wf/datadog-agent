@@ -68,7 +68,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "m: map[a: 1]",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   }

@@ -4,7 +4,7 @@
     "ddsource": "dd_debugger",
     "logger": {
       "name": "",
-      "method": "main.lenSlice",
+      "method": "main.condMultiReturn",
       "version": 0,
       "thread_id": "[goid]",
       "thread_name": ""
@@ -15,16 +15,16 @@
         "timestamp": "[ts]",
         "language": "go",
         "probe": {
-          "id": "lenSlice_isEmpty_template",
+          "id": "condDuration_gt",
           "location": {
-            "method": "main.lenSlice"
+            "method": "main.condMultiReturn"
           }
         }
       },
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "message": "empty=false",
+    "message": "duration_gt",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   },
   {
@@ -32,7 +32,7 @@
     "ddsource": "dd_debugger",
     "logger": {
       "name": "",
-      "method": "main.lenSlice",
+      "method": "main.condMultiReturn",
       "version": 0,
       "thread_id": "[goid]",
       "thread_name": ""
@@ -43,16 +43,16 @@
         "timestamp": "[ts]",
         "language": "go",
         "probe": {
-          "id": "lenSlice_isEmpty_template",
+          "id": "condDuration_gt",
           "location": {
-            "method": "main.lenSlice"
+            "method": "main.condMultiReturn"
           }
         }
       },
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "message": "empty=true",
+    "message": "duration_gt",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   }
 ]

@@ -96,7 +96,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "p={x: [], z: 1, writer: nil}",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   },
@@ -171,7 +170,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "p=hello",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   }

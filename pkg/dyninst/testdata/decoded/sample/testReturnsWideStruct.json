@@ -106,7 +106,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "testReturnsWideStruct",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   }

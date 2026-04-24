@@ -24,7 +24,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "(x.I32 == 300 || x.I32 == 999) && !isEmpty(x.S) [x.I32=300, x.S=world, tag=match]",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   }

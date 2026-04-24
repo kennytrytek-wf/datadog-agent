@@ -87,7 +87,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "needle=b",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   },
@@ -179,7 +178,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "needle=2",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   },
@@ -271,7 +269,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "needle=2",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   },
@@ -363,7 +360,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "needle=20",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   },
@@ -451,7 +447,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "needle=100",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   }

@@ -30,7 +30,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "tag == \"nilptr\" && x.I32 == 300 [tag=nilptr]",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   }

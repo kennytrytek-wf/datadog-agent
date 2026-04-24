@@ -24,7 +24,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "tag=match",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   },
@@ -59,7 +58,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "tag=nilptr",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   }

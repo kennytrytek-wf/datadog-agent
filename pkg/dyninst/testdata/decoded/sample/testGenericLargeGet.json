@@ -634,7 +634,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "x={A: [0, 0, 0, ...], B: [0, 0, 0, ...], C: [0, 0, 0, ...], D: [0, 0, 0, ...], E: [0, 0, 0, ...], ...}}",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   },
@@ -1273,7 +1272,6 @@
       "type": "snapshot"
     },
     "timestamp": "[ts]",
-    "duration": "[duration]",
     "message": "x={A: [0, 0, 0, ...], B: [0, 0, 0, ...], C: [0, 0, 0, ...], D: [0, 0, 0, ...], E: [0, 0, 0, ...], ...}}",
     "process_tags": "entrypoint.name:sample,svc.user:sample"
   }
