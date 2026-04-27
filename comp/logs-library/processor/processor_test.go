@@ -440,18 +440,18 @@ func TestExcludeTruncated(t *testing.T) {
 	assert.Equal(int64(1), msg2.Origin.LogSource.ProcessingInfo.GetCount(ruleType+":"+ruleName))
 }
 
-func TestRemapAttributeToSource(t *testing.T) {
+func TestRemapSource(t *testing.T) {
 	assert := assert.New(t)
 
 	t.Run("matching mapping remaps source", func(_ *testing.T) {
 		source := sources.NewLogSource("", &config.LogsConfig{
 			Source: "syslog_fallback",
 			ProcessingRules: []*config.ProcessingRule{{
-				Type: config.RemapAttributeToSource,
+				Type: config.RemapSource,
 				Name: "siem_remap",
-				Mappings: []*config.SourceMappingEntry{
-					{Attribute: "siem.device_vendor", Value: "Security", RemapSourceTo: "arcsight"},
-					{Attribute: "siem.device_product", Value: "palo alto", RemapSourceTo: "pan"},
+				Matching: []*config.SourceMatchEntry{
+					{Attribute: "siem.device_vendor", Value: "Security", NewSource: "arcsight"},
+					{Attribute: "siem.device_product", Value: "palo alto", NewSource: "pan"},
 				},
 			}},
 		})
@@ -473,11 +473,11 @@ func TestRemapAttributeToSource(t *testing.T) {
 		source := sources.NewLogSource("", &config.LogsConfig{
 			Source: "syslog_fallback",
 			ProcessingRules: []*config.ProcessingRule{{
-				Type: config.RemapAttributeToSource,
+				Type: config.RemapSource,
 				Name: "siem_remap",
-				Mappings: []*config.SourceMappingEntry{
-					{Attribute: "siem.device_vendor", Value: "Security", RemapSourceTo: "arcsight"},
-					{Attribute: "siem.device_product", Value: "palo alto", RemapSourceTo: "pan"},
+				Matching: []*config.SourceMatchEntry{
+					{Attribute: "siem.device_vendor", Value: "Security", NewSource: "arcsight"},
+					{Attribute: "siem.device_product", Value: "palo alto", NewSource: "pan"},
 				},
 			}},
 		})
@@ -499,10 +499,10 @@ func TestRemapAttributeToSource(t *testing.T) {
 		source := sources.NewLogSource("", &config.LogsConfig{
 			Source: "syslog_fallback",
 			ProcessingRules: []*config.ProcessingRule{{
-				Type: config.RemapAttributeToSource,
+				Type: config.RemapSource,
 				Name: "siem_remap",
-				Mappings: []*config.SourceMappingEntry{
-					{Attribute: "siem.device_vendor", Value: "Security", RemapSourceTo: "arcsight"},
+				Matching: []*config.SourceMatchEntry{
+					{Attribute: "siem.device_vendor", Value: "Security", NewSource: "arcsight"},
 				},
 			}},
 		})
@@ -524,10 +524,10 @@ func TestRemapAttributeToSource(t *testing.T) {
 		source := sources.NewLogSource("", &config.LogsConfig{
 			Source: "syslog_fallback",
 			ProcessingRules: []*config.ProcessingRule{{
-				Type: config.RemapAttributeToSource,
+				Type: config.RemapSource,
 				Name: "siem_remap",
-				Mappings: []*config.SourceMappingEntry{
-					{Attribute: "siem.device_vendor", Value: "Security", RemapSourceTo: "arcsight"},
+				Matching: []*config.SourceMatchEntry{
+					{Attribute: "siem.device_vendor", Value: "Security", NewSource: "arcsight"},
 				},
 			}},
 		})
@@ -543,11 +543,11 @@ func TestRemapAttributeToSource(t *testing.T) {
 		source := sources.NewLogSource("", &config.LogsConfig{
 			Source: "syslog_fallback",
 			ProcessingRules: []*config.ProcessingRule{{
-				Type: config.RemapAttributeToSource,
+				Type: config.RemapSource,
 				Name: "siem_remap",
-				Mappings: []*config.SourceMappingEntry{
-					{Attribute: "siem.format", Value: "CEF", RemapSourceTo: "cef_source"},
-					{Attribute: "siem.device_vendor", Value: "Security", RemapSourceTo: "arcsight"},
+				Matching: []*config.SourceMatchEntry{
+					{Attribute: "siem.format", Value: "CEF", NewSource: "cef_source"},
+					{Attribute: "siem.device_vendor", Value: "Security", NewSource: "arcsight"},
 				},
 			}},
 		})
@@ -567,17 +567,17 @@ func TestRemapAttributeToSource(t *testing.T) {
 	})
 }
 
-func TestRemapAttributeToSource_EscapedDotPath(t *testing.T) {
+func TestRemapSource_EscapedDotPath(t *testing.T) {
 	assert := assert.New(t)
 
 	t.Run("escaped dot matches dotted SD-ID key", func(_ *testing.T) {
 		source := sources.NewLogSource("", &config.LogsConfig{
 			Source: "fallback",
 			ProcessingRules: []*config.ProcessingRule{{
-				Type: config.RemapAttributeToSource,
+				Type: config.RemapSource,
 				Name: "sd_remap",
-				Mappings: []*config.SourceMappingEntry{
-					{Attribute: `syslog.structured_data.my\.org@99999.status`, Value: "ok", RemapSourceTo: "matched_sd"},
+				Matching: []*config.SourceMatchEntry{
+					{Attribute: `syslog.structured_data.my\.org@99999.status`, Value: "ok", NewSource: "matched_sd"},
 				},
 			}},
 		})
@@ -603,10 +603,10 @@ func TestRemapAttributeToSource_EscapedDotPath(t *testing.T) {
 		source := sources.NewLogSource("", &config.LogsConfig{
 			Source: "fallback",
 			ProcessingRules: []*config.ProcessingRule{{
-				Type: config.RemapAttributeToSource,
+				Type: config.RemapSource,
 				Name: "sd_remap",
-				Mappings: []*config.SourceMappingEntry{
-					{Attribute: "syslog.structured_data.my.org@99999.status", Value: "ok", RemapSourceTo: "should_not_match"},
+				Matching: []*config.SourceMatchEntry{
+					{Attribute: "syslog.structured_data.my.org@99999.status", Value: "ok", NewSource: "should_not_match"},
 				},
 			}},
 		})
