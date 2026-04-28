@@ -17,11 +17,11 @@ Probes:
           events:
             - Kind: Entry
               Type: 1336 EventRootType Probe[main.CaptureBytes]
-              InjectionPoints: [{PC: "0x205280", Frameless: true}]
+              InjectionPoints: [{PC: "0x2052a0", Frameless: true}]
               Condition: null
             - Kind: Return
               Type: 1337 EventRootType Probe[main.CaptureBytes]Return
-              InjectionPoints: [{PC: "0x2052a0", Frameless: true}]
+              InjectionPoints: [{PC: "0x2052c0", Frameless: true}]
               Condition: null
     - id: capture_bytes_return
       version: 0
@@ -40,11 +40,11 @@ Probes:
           events:
             - Kind: Entry
               Type: 1338 EventRootType Probe[main.CaptureBytesReturn]
-              InjectionPoints: [{PC: "0x2052c8", Frameless: false}]
+              InjectionPoints: [{PC: "0x2052e8", Frameless: false}]
               Condition: null
             - Kind: Return
               Type: 1339 EventRootType Probe[main.CaptureBytesReturn]Return
-              InjectionPoints: [{PC: "0x205340", Frameless: false}]
+              InjectionPoints: [{PC: "0x205360", Frameless: false}]
               Condition: null
     - id: capture_chain
       version: 0
@@ -59,15 +59,15 @@ Probes:
       segments: []
       captureSnapshot: true
       instances:
-        - subprogram: {subprogram: 3}
+        - subprogram: {subprogram: 4}
           events:
             - Kind: Entry
-              Type: 1340 EventRootType Probe[main.CaptureChain]
-              InjectionPoints: [{PC: "0x205370", Frameless: true}]
+              Type: 1342 EventRootType Probe[main.CaptureChain]
+              InjectionPoints: [{PC: "0x205400", Frameless: true}]
               Condition: null
             - Kind: Return
-              Type: 1341 EventRootType Probe[main.CaptureChain]Return
-              InjectionPoints: [{PC: "0x205398", Frameless: true}]
+              Type: 1343 EventRootType Probe[main.CaptureChain]Return
+              InjectionPoints: [{PC: "0x205428", Frameless: true}]
               Condition: null
     - id: capture_chain_return
       version: 0
@@ -82,15 +82,15 @@ Probes:
       segments: []
       captureSnapshot: true
       instances:
-        - subprogram: {subprogram: 5}
+        - subprogram: {subprogram: 6}
           events:
             - Kind: Entry
-              Type: 1344 EventRootType Probe[main.CaptureChainReturn]
-              InjectionPoints: [{PC: "0x205668", Frameless: false}]
+              Type: 1346 EventRootType Probe[main.CaptureChainReturn]
+              InjectionPoints: [{PC: "0x2056f8", Frameless: false}]
               Condition: null
             - Kind: Return
-              Type: 1345 EventRootType Probe[main.CaptureChainReturn]Return
-              InjectionPoints: [{PC: "0x205744", Frameless: false}]
+              Type: 1347 EventRootType Probe[main.CaptureChainReturn]Return
+              InjectionPoints: [{PC: "0x2057d4", Frameless: false}]
               Condition: null
     - id: capture_string_chain
       version: 0
@@ -105,26 +105,71 @@ Probes:
       segments: []
       captureSnapshot: true
       instances:
-        - subprogram: {subprogram: 4}
+        - subprogram: {subprogram: 5}
           events:
             - Kind: Entry
-              Type: 1342 EventRootType Probe[main.CaptureStringChain]
-              InjectionPoints: [{PC: "0x2053a0", Frameless: true}]
+              Type: 1344 EventRootType Probe[main.CaptureStringChain]
+              InjectionPoints: [{PC: "0x205430", Frameless: true}]
               Condition: null
             - Kind: Return
-              Type: 1343 EventRootType Probe[main.CaptureStringChain]Return
-              InjectionPoints: [{PC: "0x2053d4", Frameless: true}]
+              Type: 1345 EventRootType Probe[main.CaptureStringChain]Return
+              InjectionPoints: [{PC: "0x205464", Frameless: true}]
               Condition: null
+    - id: condDuration_threshold
+      version: 0
+      type: LOG_PROBE
+      where: {methodName: main.CaptureSleep}
+      when:
+        dsl: '@duration > 100.0'
+        json: {gt: [{ref: '@duration'}, 100]}
+      sampling: {snapshotsPerSecond: 100}
+      template: ms={ms}
+      segments: [ms=, {json: {ref: ms}, dsl: ms}]
+      captureSnapshot: false
+      instances:
+        - subprogram: {subprogram: 3}
+          events:
+            - Kind: Entry
+              Type: 1340 EventRootType Probe[main.CaptureSleep]
+              InjectionPoints: [{PC: "0x2053a8", Frameless: false}]
+              Condition: null
+            - Kind: Return
+              Type: 1341 EventRootType Probe[main.CaptureSleep]Return
+              InjectionPoints: [{PC: "0x2053d4", Frameless: false}]
+              Condition:
+                Type: 5 BaseType bool
+                Operations:
+                    - __kind: LocationOp
+                      Variable: {name: '@duration', role: Duration}
+                      Offset: 0
+                      ByteSize: 8
+                    - __kind: ExprPushOffsetOp
+                      ByteSize: 8
+                    - __kind: ExprLoadLiteralOp
+                      Data: AOH1BQAAAAA=
+                    - __kind: ExprCmpBaseOp
+                      Op: Gt
+                      Kind: Int
+                      ByteSize: 8
+                    - __kind: ConditionCheckOp
+          probeTemplate:
+            TemplateString: ms={ms}
+            Segments:
+                - ms=
+                - JSON: {Ref: ms}
+                  DSL: ms
+                  EventKind: Entry
+                  EventExpressionIndex: 0
 Subprograms:
     - ID: 1
       Name: main.CaptureBytes
-      OutOfLinePCRanges: [0x205280..0x2052b0]
+      OutOfLinePCRanges: [0x2052a0..0x2052d0]
       InlinePCRanges: []
       Variables:
         - Name: payload
           Type: 40 GoSliceHeaderType []uint8
           Locations:
-            - Range: 0x205280..0x205290
+            - Range: 0x2052a0..0x2052b0
               Pieces:
                 - Size: 8
                   Op: {RegNo: 0, Shift: 0}
@@ -132,7 +177,7 @@ Subprograms:
                   Op: {RegNo: 1, Shift: 0}
                 - Size: 8
                   Op: {RegNo: 2, Shift: 0}
-            - Range: 0x205290..0x2052b0
+            - Range: 0x2052b0..0x2052d0
               Pieces:
                 - Size: 8
                   Op: null
@@ -145,7 +190,7 @@ Subprograms:
         - Name: tag
           Type: 10 GoStringHeaderType string
           Locations:
-            - Range: 0x205280..0x2052b0
+            - Range: 0x2052a0..0x2052d0
               Pieces:
                 - Size: 8
                   Op: {RegNo: 3, Shift: 0}
@@ -156,13 +201,13 @@ Subprograms:
       DictRegister: null
     - ID: 2
       Name: main.CaptureBytesReturn
-      OutOfLinePCRanges: [0x2052b0..0x205370]
+      OutOfLinePCRanges: [0x2052d0..0x205390]
       InlinePCRanges: []
       Variables:
         - Name: payload
           Type: 40 GoSliceHeaderType []uint8
           Locations:
-            - Range: 0x2052b0..0x2052e0
+            - Range: 0x2052d0..0x205300
               Pieces:
                 - Size: 8
                   Op: {RegNo: 0, Shift: 0}
@@ -170,7 +215,7 @@ Subprograms:
                   Op: {RegNo: 1, Shift: 0}
                 - Size: 8
                   Op: {RegNo: 2, Shift: 0}
-            - Range: 0x2052e0..0x2052e8
+            - Range: 0x205300..0x205308
               Pieces:
                 - Size: 8
                   Op: {RegNo: 0, Shift: 0}
@@ -178,7 +223,7 @@ Subprograms:
                   Op: {CfaOffset: 16}
                 - Size: 8
                   Op: null
-            - Range: 0x2052e8..0x2052ec
+            - Range: 0x205308..0x20530c
               Pieces:
                 - Size: 8
                   Op: null
@@ -186,7 +231,7 @@ Subprograms:
                   Op: {CfaOffset: 16}
                 - Size: 8
                   Op: null
-            - Range: 0x2052ec..0x205370
+            - Range: 0x20530c..0x205390
               Pieces:
                 - Size: 8
                   Op: null
@@ -199,22 +244,22 @@ Subprograms:
         - Name: tag
           Type: 10 GoStringHeaderType string
           Locations:
-            - Range: 0x2052b0..0x2052f0
+            - Range: 0x2052d0..0x205310
               Pieces:
                 - Size: 8
                   Op: {RegNo: 3, Shift: 0}
                 - Size: 8
                   Op: {RegNo: 4, Shift: 0}
-            - Range: 0x2052f0..0x205370
+            - Range: 0x205310..0x205390
               Pieces: [{Size: 8, Op: null}, {Size: 8, Op: {CfaOffset: 40}}]
           Role: Parameter
           DictIndex: -1
         - Name: ~r0
           Type: 40 GoSliceHeaderType []uint8
           Locations:
-            - Range: 0x2052b0..0x205340
+            - Range: 0x2052d0..0x205360
               Pieces: []
-            - Range: 0x205340..0x205341
+            - Range: 0x205360..0x205361
               Pieces:
                 - Size: 8
                   Op: {RegNo: 0, Shift: 0}
@@ -222,29 +267,29 @@ Subprograms:
                   Op: {RegNo: 1, Shift: 0}
                 - Size: 8
                   Op: {RegNo: 2, Shift: 0}
-            - Range: 0x205341..0x205370
+            - Range: 0x205361..0x205390
               Pieces: []
           Role: Return
           DictIndex: -1
         - Name: ~r1
           Type: 15 GoInterfaceType error
           Locations:
-            - Range: 0x2052b0..0x205340
+            - Range: 0x2052d0..0x205360
               Pieces: []
-            - Range: 0x205340..0x205341
+            - Range: 0x205360..0x205361
               Pieces:
                 - Size: 8
                   Op: {RegNo: 3, Shift: 0}
                 - Size: 8
                   Op: {RegNo: 4, Shift: 0}
-            - Range: 0x205341..0x205370
+            - Range: 0x205361..0x205390
               Pieces: []
           Role: Return
           DictIndex: -1
         - Name: result
           Type: 40 GoSliceHeaderType []uint8
           Locations:
-            - Range: 0x2052f0..0x2052f8
+            - Range: 0x205310..0x205318
               Pieces:
                 - Size: 8
                   Op: {RegNo: 0, Shift: 0}
@@ -252,7 +297,7 @@ Subprograms:
                   Op: null
                 - Size: 8
                   Op: null
-            - Range: 0x2052f8..0x205370
+            - Range: 0x205318..0x205390
               Pieces:
                 - Size: 8
                   Op: {RegNo: 0, Shift: 0}
@@ -265,149 +310,164 @@ Subprograms:
         - Name: i
           Type: 8 BaseType int
           Locations:
-            - Range: 0x205308..0x205338
+            - Range: 0x205328..0x205358
               Pieces: [{Size: 8, Op: {RegNo: 1, Shift: 0}}]
           Role: Local
           DictIndex: -1
       DictRegister: null
     - ID: 3
+      Name: main.CaptureSleep
+      OutOfLinePCRanges: [0x205390..0x205400]
+      InlinePCRanges: []
+      Variables:
+        - Name: ms
+          Type: 8 BaseType int
+          Locations:
+            - Range: 0x205390..0x2053b8
+              Pieces: [{Size: 8, Op: {RegNo: 0, Shift: 0}}]
+            - Range: 0x2053b8..0x205400
+              Pieces: [{Size: 8, Op: {CfaOffset: 8}}]
+          Role: Parameter
+          DictIndex: -1
+      DictRegister: null
+    - ID: 4
       Name: main.CaptureChain
-      OutOfLinePCRanges: [0x205370..0x2053a0]
+      OutOfLinePCRanges: [0x205400..0x205430]
       InlinePCRanges: []
       Variables:
         - Name: head
           Type: 113 PointerType *main.Node
           Locations:
-            - Range: 0x205370..0x205378
+            - Range: 0x205400..0x205408
               Pieces: [{Size: 8, Op: {RegNo: 0, Shift: 0}}]
           Role: Parameter
           DictIndex: -1
         - Name: "n"
           Type: 8 BaseType int
           Locations:
-            - Range: 0x205374..0x2053a0
+            - Range: 0x205404..0x205430
               Pieces: [{Size: 8, Op: {RegNo: 0, Shift: 0}}]
           Role: Local
           DictIndex: -1
         - Name: cur
           Type: 113 PointerType *main.Node
           Locations:
-            - Range: 0x205370..0x20538c
+            - Range: 0x205400..0x20541c
               Pieces: [{Size: 8, Op: {RegNo: 0, Shift: 0}}]
           Role: Local
           DictIndex: -1
       DictRegister: null
-    - ID: 4
+    - ID: 5
       Name: main.CaptureStringChain
-      OutOfLinePCRanges: [0x2053a0..0x2053e0]
+      OutOfLinePCRanges: [0x205430..0x205470]
       InlinePCRanges: []
       Variables:
         - Name: head
           Type: 115 PointerType *main.StringNode
           Locations:
-            - Range: 0x2053a0..0x2053ac
+            - Range: 0x205430..0x20543c
               Pieces: [{Size: 8, Op: {RegNo: 0, Shift: 0}}]
           Role: Parameter
           DictIndex: -1
         - Name: "n"
           Type: 8 BaseType int
           Locations:
-            - Range: 0x2053a4..0x2053e0
+            - Range: 0x205434..0x205470
               Pieces: [{Size: 8, Op: {RegNo: 0, Shift: 0}}]
           Role: Local
           DictIndex: -1
         - Name: totalLen
           Type: 8 BaseType int
           Locations:
-            - Range: 0x2053a4..0x2053e0
+            - Range: 0x205434..0x205470
               Pieces: [{Size: 8, Op: {RegNo: 0, Shift: 0}}]
           Role: Local
           DictIndex: -1
         - Name: cur
           Type: 115 PointerType *main.StringNode
           Locations:
-            - Range: 0x2053a0..0x2053c4
+            - Range: 0x205430..0x205454
               Pieces: [{Size: 8, Op: {RegNo: 0, Shift: 0}}]
           Role: Local
           DictIndex: -1
       DictRegister: null
-    - ID: 5
+    - ID: 6
       Name: main.CaptureChainReturn
-      OutOfLinePCRanges: [0x205650..0x205770]
+      OutOfLinePCRanges: [0x2056e0..0x205800]
       InlinePCRanges: []
       Variables:
         - Name: head
           Type: 113 PointerType *main.Node
           Locations:
-            - Range: 0x205650..0x205684
+            - Range: 0x2056e0..0x205714
               Pieces: [{Size: 8, Op: {RegNo: 0, Shift: 0}}]
-            - Range: 0x205684..0x205700
+            - Range: 0x205714..0x205790
               Pieces: [{Size: 8, Op: {CfaOffset: 8}}]
-            - Range: 0x205700..0x205708
+            - Range: 0x205790..0x205798
               Pieces: [{Size: 8, Op: {RegNo: 0, Shift: 0}}]
           Role: Parameter
           DictIndex: -1
         - Name: returnLen
           Type: 8 BaseType int
           Locations:
-            - Range: 0x205650..0x205674
+            - Range: 0x2056e0..0x205704
               Pieces: [{Size: 8, Op: {RegNo: 1, Shift: 0}}]
-            - Range: 0x205680..0x20568c
+            - Range: 0x205710..0x20571c
               Pieces: [{Size: 8, Op: {CfaOffset: 16}}]
-            - Range: 0x20568c..0x205700
+            - Range: 0x20571c..0x205790
               Pieces: [{Size: 8, Op: {CfaOffset: 16}}]
           Role: Parameter
           DictIndex: -1
         - Name: ~r0
           Type: 113 PointerType *main.Node
           Locations:
-            - Range: 0x205650..0x205744
+            - Range: 0x2056e0..0x2057d4
               Pieces: []
-            - Range: 0x205744..0x205745
+            - Range: 0x2057d4..0x2057d5
               Pieces: [{Size: 8, Op: {RegNo: 0, Shift: 0}}]
-            - Range: 0x205745..0x205770
+            - Range: 0x2057d5..0x205800
               Pieces: []
           Role: Return
           DictIndex: -1
         - Name: ~r1
           Type: 15 GoInterfaceType error
           Locations:
-            - Range: 0x205650..0x205744
+            - Range: 0x2056e0..0x2057d4
               Pieces: []
-            - Range: 0x205744..0x205745
+            - Range: 0x2057d4..0x2057d5
               Pieces:
                 - Size: 8
                   Op: {RegNo: 1, Shift: 0}
                 - Size: 8
                   Op: {RegNo: 2, Shift: 0}
-            - Range: 0x205745..0x205770
+            - Range: 0x2057d5..0x205800
               Pieces: []
           Role: Return
           DictIndex: -1
         - Name: result
           Type: 113 PointerType *main.Node
           Locations:
-            - Range: 0x205700..0x20571c
+            - Range: 0x205790..0x2057ac
               Pieces: [{Size: 8, Op: {RegNo: 1, Shift: 0}}]
           Role: Local
           DictIndex: -1
         - Name: "n"
           Type: 8 BaseType int
           Locations:
-            - Range: 0x205704..0x205730
+            - Range: 0x205794..0x2057c0
               Pieces: [{Size: 8, Op: {RegNo: 0, Shift: 0}}]
-            - Range: 0x205730..0x205744
+            - Range: 0x2057c0..0x2057d4
               Pieces: [{Size: 8, Op: {RegNo: 2, Shift: 0}}]
           Role: Local
           DictIndex: -1
         - Name: cur
           Type: 113 PointerType *main.Node
           Locations:
-            - Range: 0x205650..0x205684
+            - Range: 0x2056e0..0x205714
               Pieces: [{Size: 8, Op: {RegNo: 0, Shift: 0}}]
-            - Range: 0x205684..0x205700
+            - Range: 0x205714..0x205790
               Pieces: [{Size: 8, Op: {CfaOffset: 8}}]
-            - Range: 0x205700..0x205718
+            - Range: 0x205790..0x2057a8
               Pieces: [{Size: 8, Op: {RegNo: 0, Shift: 0}}]
           Role: Local
           DictIndex: -1
@@ -3529,7 +3589,7 @@ Types:
       ID: 1337
       Name: Probe[main.CaptureBytes]Return
     - __kind: EventRootType
-      ID: 1344
+      ID: 1346
       Name: Probe[main.CaptureChainReturn]
       ByteSize: 17
       ExprStatusArraySize: 1
@@ -3541,7 +3601,7 @@ Types:
             Type: 113 PointerType *main.Node
             Operations:
                 - __kind: LocationOp
-                  Variable: {subprogram: 5, index: 0, name: head}
+                  Variable: {subprogram: 6, index: 0, name: head}
                   Offset: 0
                   ByteSize: 8
           DictIndex: -1
@@ -3552,12 +3612,12 @@ Types:
             Type: 8 BaseType int
             Operations:
                 - __kind: LocationOp
-                  Variable: {subprogram: 5, index: 1, name: returnLen}
+                  Variable: {subprogram: 6, index: 1, name: returnLen}
                   Offset: 0
                   ByteSize: 8
           DictIndex: -1
     - __kind: EventRootType
-      ID: 1345
+      ID: 1347
       Name: Probe[main.CaptureChainReturn]Return
       ByteSize: 25
       ExprStatusArraySize: 1
@@ -3569,7 +3629,7 @@ Types:
             Type: 113 PointerType *main.Node
             Operations:
                 - __kind: LocationOp
-                  Variable: {subprogram: 5, index: 2, name: ~r0}
+                  Variable: {subprogram: 6, index: 2, name: ~r0}
                   Offset: 0
                   ByteSize: 8
           DictIndex: -1
@@ -3580,12 +3640,12 @@ Types:
             Type: 15 GoInterfaceType error
             Operations:
                 - __kind: LocationOp
-                  Variable: {subprogram: 5, index: 3, name: ~r1}
+                  Variable: {subprogram: 6, index: 3, name: ~r1}
                   Offset: 0
                   ByteSize: 16
           DictIndex: -1
     - __kind: EventRootType
-      ID: 1340
+      ID: 1342
       Name: Probe[main.CaptureChain]
       ByteSize: 9
       ExprStatusArraySize: 1
@@ -3597,15 +3657,35 @@ Types:
             Type: 113 PointerType *main.Node
             Operations:
                 - __kind: LocationOp
-                  Variable: {subprogram: 3, index: 0, name: head}
+                  Variable: {subprogram: 4, index: 0, name: head}
+                  Offset: 0
+                  ByteSize: 8
+          DictIndex: -1
+    - __kind: EventRootType
+      ID: 1343
+      Name: Probe[main.CaptureChain]Return
+    - __kind: EventRootType
+      ID: 1340
+      Name: Probe[main.CaptureSleep]
+      ByteSize: 9
+      ExprStatusArraySize: 1
+      Expressions:
+        - Name: ms
+          Offset: 1
+          Kind: template_segment
+          Expression:
+            Type: 8 BaseType int
+            Operations:
+                - __kind: LocationOp
+                  Variable: {subprogram: 3, index: 0, name: ms}
                   Offset: 0
                   ByteSize: 8
           DictIndex: -1
     - __kind: EventRootType
       ID: 1341
-      Name: Probe[main.CaptureChain]Return
+      Name: Probe[main.CaptureSleep]Return
     - __kind: EventRootType
-      ID: 1342
+      ID: 1344
       Name: Probe[main.CaptureStringChain]
       ByteSize: 9
       ExprStatusArraySize: 1
@@ -3617,12 +3697,12 @@ Types:
             Type: 115 PointerType *main.StringNode
             Operations:
                 - __kind: LocationOp
-                  Variable: {subprogram: 4, index: 0, name: head}
+                  Variable: {subprogram: 5, index: 0, name: head}
                   Offset: 0
                   ByteSize: 8
           DictIndex: -1
     - __kind: EventRootType
-      ID: 1343
+      ID: 1345
       Name: Probe[main.CaptureStringChain]Return
     - __kind: ArrayType
       ID: 736
@@ -16450,7 +16530,7 @@ Types:
       ByteSize: 4
       GoRuntimeType: 216480
       GoKind: 5
-MaxTypeID: 1345
+MaxTypeID: 1347
 Issues: []
 GoModuledataInfo: {FirstModuledataAddr: "0x500320", TypesOffset: 296}
 GoMapHashInfo: {UseAeshashAddr: "0x575eb3", AeskeyschedAddr: "0x576800"}
