@@ -33,6 +33,7 @@ import (
 type syslogFrameMatcher struct {
 	contentLenLimit int
 	discardedBytes  *status.CountInfo
+	oversizedFrames *status.CountInfo
 }
 
 // FindFrame implements FrameMatcher. It looks for a complete syslog frame
@@ -69,6 +70,10 @@ func (m *syslogFrameMatcher) FindFrame(buf []byte, seen int) ([]byte, int, bool)
 // forward for the next probable PRI header (<[0-9]) or newline delimiter and
 // emits everything before it as a single malformed frame. If no sync point is
 // found, returns nil to wait for more data.
+//
+// When the malformed content exceeds contentLenLimit, only the first
+// contentLenLimit bytes are emitted and the remainder stays in the buffer
+// for re-processing as continuation frames.
 func (m *syslogFrameMatcher) findMalformed(buf []byte) ([]byte, int, bool) {
 	for i := 1; i < len(buf); i++ {
 		if isSyslogFrameStart(buf, i) || buf[i] == '\n' || buf[i] == 0 {
@@ -78,12 +83,11 @@ func (m *syslogFrameMatcher) findMalformed(buf []byte) ([]byte, int, bool) {
 				rawDataLen = i + 1
 			}
 			m.recordDiscarded(int64(len(content)))
-			wasTruncated := false
 			if len(content) > m.contentLenLimit {
-				content = content[:m.contentLenLimit]
-				wasTruncated = true
+				m.recordOversized()
+				return buf[:m.contentLenLimit], m.contentLenLimit, true
 			}
-			return content, rawDataLen, wasTruncated
+			return content, rawDataLen, false
 		}
 	}
 	return nil, 0, false
@@ -106,6 +110,10 @@ func isSyslogFrameStart(buf []byte, i int) bool {
 
 // findOctetCounted parses MSG-LEN SP SYSLOG-MSG from the beginning of buf.
 // Returns nil if the buffer does not yet contain a complete frame.
+//
+// When the message body exceeds contentLenLimit, only the first
+// contentLenLimit raw bytes are emitted and the remainder stays in the
+// buffer for re-processing as continuation frames.
 func (m *syslogFrameMatcher) findOctetCounted(buf []byte) ([]byte, int, bool) {
 	// Parse the decimal length prefix.
 	msgLen := 0
@@ -148,6 +156,7 @@ func (m *syslogFrameMatcher) findOctetCounted(buf []byte) ([]byte, int, bool) {
 
 	content := buf[headerLen:totalLen]
 	if len(content) > m.contentLenLimit {
+		m.recordOversized()
 		return buf[:m.contentLenLimit], m.contentLenLimit, true
 	}
 
@@ -156,6 +165,10 @@ func (m *syslogFrameMatcher) findOctetCounted(buf []byte) ([]byte, int, bool) {
 
 // findNonTransparent scans for a LF or NUL delimiter starting from seen.
 // Trailing CR+LF and NUL are stripped from the returned content.
+//
+// When the content exceeds contentLenLimit, only the first contentLenLimit
+// raw bytes are emitted and the remainder (including the delimiter) stays
+// in the buffer for re-processing as continuation frames.
 func (m *syslogFrameMatcher) findNonTransparent(buf []byte, seen int) ([]byte, int, bool) {
 	start := seen
 	if start < 0 {
@@ -168,6 +181,7 @@ func (m *syslogFrameMatcher) findNonTransparent(buf []byte, seen int) ([]byte, i
 			rawDataLen := i + 1 // include the delimiter
 
 			if len(content) > m.contentLenLimit {
+				m.recordOversized()
 				return buf[:m.contentLenLimit], m.contentLenLimit, true
 			}
 
@@ -191,6 +205,7 @@ func (m *syslogFrameMatcher) FlushFrame(buf []byte) ([]byte, int) {
 		return nil, 0
 	}
 	if len(content) > m.contentLenLimit {
+		m.recordOversized()
 		return content[:m.contentLenLimit], m.contentLenLimit
 	}
 	return content, len(buf)
@@ -205,6 +220,15 @@ func (m *syslogFrameMatcher) recordDiscarded(n int64) {
 	}
 }
 
+// recordOversized increments both the global telemetry counter and the
+// per-tailer status counter for oversized frame splits.
+func (m *syslogFrameMatcher) recordOversized() {
+	telemetry.GetStatsTelemetryProvider().Count("logs_syslog_framer.oversized_frames", 1, nil)
+	if m.oversizedFrames != nil {
+		m.oversizedFrames.Add(1)
+	}
+}
+
 // NewSyslogFramer creates a Framer with RFC 6587 syslog framing and registers
 // a "Syslog Discarded Bytes" counter in tailerInfo for status display.
 func NewSyslogFramer(
@@ -214,10 +238,13 @@ func NewSyslogFramer(
 ) *Framer {
 	discardedBytes := status.NewCountInfo("Syslog Discarded Bytes")
 	tailerInfo.Register(discardedBytes)
+	oversizedFrames := status.NewCountInfo("Syslog Oversized Frames")
+	tailerInfo.Register(oversizedFrames)
 
 	matcher := &syslogFrameMatcher{
 		contentLenLimit: contentLenLimit,
 		discardedBytes:  discardedBytes,
+		oversizedFrames: oversizedFrames,
 	}
 	return &Framer{
 		frames:          atomic.NewInt64(0),
