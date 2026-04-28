@@ -1,0 +1,23 @@
+---
+name: "Validate Renovate coverage of Bazel native deps"
+on:
+  pull_request:
+    paths:
+      - "deps/**"
+      - "renovate.json"
+      - "tasks/renovate.py"
+      - ".github/workflows/validate-renovate-deps.yml"
+
+permissions: {}
+
+jobs:
+  check_coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install dda
+        uses: ./.github/actions/install-dda
+        with:
+          features: legacy-tasks
+      - name: Verify every http_archive in deps/ has Renovate coverage
+        run: dda inv -- renovate.check-bazel-coverage
