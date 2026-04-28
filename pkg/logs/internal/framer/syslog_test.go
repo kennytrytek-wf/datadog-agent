@@ -33,6 +33,7 @@ func processSyslog(t *testing.T, limit int, chunks [][]byte) (contents []string,
 		logMessage := message.NewMessage(c, nil, "", 0)
 		fr.Process(logMessage)
 	}
+	fr.Flush()
 	return
 }
 
@@ -161,27 +162,209 @@ func TestSyslogOctetCountingPartialHeader(t *testing.T) {
 }
 
 func TestSyslogContentLenLimitOctetCounted(t *testing.T) {
-	// Octet-counted message exceeding content limit: the first
-	// contentLenLimit raw bytes are emitted (including the header).
+	// Octet-counted message exceeding content limit is split into
+	// bounded continuation frames with zero data loss.
 	limit := 20
 	msg := "<34>1 " + strings.Repeat("x", 30) // 36 bytes total
-	full := []byte(fmt.Sprintf("%d %s", len(msg), msg))
+	header := fmt.Sprintf("%d ", len(msg))
+	full := []byte(header + msg)
 
 	got, rawLens := processSyslog(t, limit, [][]byte{full})
-	require.Len(t, got, 1)
-	assert.Equal(t, string(full[:limit]), got[0])
+	require.True(t, len(got) > 1, "oversized frame should be split into multiple frames")
+
+	// Verify zero data loss: concatenating all emitted frames should
+	// reproduce the complete original input (header + body).
+	combined := strings.Join(got, "")
+	assert.Equal(t, string(full), combined)
+
+	// First frame should be exactly limit bytes of raw content.
+	assert.Len(t, got[0], limit)
 	assert.Equal(t, limit, rawLens[0])
 }
 
 func TestSyslogContentLenLimitNonTransparent(t *testing.T) {
-	// Non-transparent message exceeding content limit gets truncated.
+	// Non-transparent message exceeding content limit is split into
+	// bounded continuation frames with zero data loss.
 	limit := 20
 	msg := "<34>1 " + strings.Repeat("x", 30) // 36 bytes
 	input := []byte(msg + "\n")
 
-	got, _ := processSyslog(t, limit, [][]byte{input})
-	require.Len(t, got, 1)
-	assert.Equal(t, msg[:limit], got[0])
+	got, rawLens := processSyslog(t, limit, [][]byte{input})
+	require.True(t, len(got) > 1, "oversized frame should be split into multiple frames")
+
+	// First frame is raw bytes from the start of the buffer.
+	assert.Len(t, got[0], limit)
+	assert.Equal(t, limit, rawLens[0])
+
+	// Verify zero data loss: concatenated output reproduces the full message.
+	combined := strings.Join(got, "")
+	assert.Equal(t, msg, combined)
+}
+
+func TestSyslogOversizedMalformedSplit(t *testing.T) {
+	// Malformed content exceeding contentLenLimit is split rather than truncated.
+	// Use a limit large enough to hold the valid syslog message in one frame.
+	limit := 10
+	junk := strings.Repeat("Z", 25)
+	validMsg := "<34>1 msg"
+	input := []byte(junk + validMsg + "\n")
+
+	tailerInfo := status.NewInfoRegistry()
+	var contents []string
+	var truncated []bool
+	outputFn := func(msg *message.Message, _ int) {
+		if len(msg.GetContent()) > 0 {
+			contents = append(contents, string(msg.GetContent()))
+			truncated = append(truncated, msg.ParsingExtra.IsTruncated)
+		}
+	}
+	fr := NewSyslogFramer(outputFn, limit, tailerInfo)
+	fr.Process(message.NewMessage(input, nil, "", 0))
+
+	require.True(t, len(contents) >= 3, "expected at least 3 frames: split malformed + valid syslog, got %d: %v", len(contents), contents)
+
+	// The last frame is the valid syslog message (fits within limit).
+	assert.Equal(t, validMsg, contents[len(contents)-1])
+
+	// Verify zero data loss for the malformed portion.
+	malformedParts := contents[:len(contents)-1]
+	malformedCombined := strings.Join(malformedParts, "")
+	assert.Equal(t, junk, malformedCombined)
+
+	// First chunk should be flagged as truncated.
+	assert.True(t, truncated[0], "first chunk of oversized malformed frame should be truncated")
+
+	rendered := tailerInfo.Rendered()
+	oversized := rendered["Syslog Oversized Frames"]
+	require.NotEmpty(t, oversized)
+}
+
+func TestSyslogOversizedFlushFrame(t *testing.T) {
+	t.Run("matcher splits oversized buffer", func(t *testing.T) {
+		// Test the FlushFrame method directly on the matcher.
+		limit := 10
+		matcher := &syslogFrameMatcher{contentLenLimit: limit}
+		buf := []byte("<134>" + strings.Repeat("A", 25)) // 30 bytes
+
+		// First call: emits limit bytes.
+		content, rawDataLen := matcher.FlushFrame(buf)
+		require.NotNil(t, content)
+		assert.Len(t, content, limit)
+		assert.Equal(t, limit, rawDataLen)
+
+		// Second call with remainder.
+		buf = buf[rawDataLen:]
+		content, rawDataLen = matcher.FlushFrame(buf)
+		require.NotNil(t, content)
+		assert.Len(t, content, limit)
+		assert.Equal(t, limit, rawDataLen)
+
+		// Third call with final remainder.
+		buf = buf[rawDataLen:]
+		content, rawDataLen = matcher.FlushFrame(buf)
+		require.NotNil(t, content)
+		assert.Len(t, content, 10)
+		assert.Equal(t, 10, rawDataLen)
+	})
+
+	t.Run("Flush loop emits all bytes at EOF", func(t *testing.T) {
+		// Use a small enough message that Process() buffers it (under limit),
+		// then verify Flush emits it.
+		limit := 20
+		msg := "<134>hello world" // 16 bytes, under limit
+
+		var contents []string
+		var truncated []bool
+		outputFn := func(msg *message.Message, _ int) {
+			if len(msg.GetContent()) > 0 {
+				contents = append(contents, string(msg.GetContent()))
+				truncated = append(truncated, msg.ParsingExtra.IsTruncated)
+			}
+		}
+		tailerInfo := status.NewInfoRegistry()
+		fr := NewSyslogFramer(outputFn, limit, tailerInfo)
+		fr.Process(message.NewMessage([]byte(msg), nil, "", 0))
+		require.Empty(t, contents, "no delimiter, nothing emitted yet")
+
+		fr.Flush()
+		require.Len(t, contents, 1)
+		assert.Equal(t, msg, contents[0])
+		assert.False(t, truncated[0], "single flush frame should not be truncated")
+	})
+}
+
+func TestSyslogFlushEmitsAllBytes(t *testing.T) {
+	// Flush emits all remaining bytes at EOF, including partial
+	// octet-counted frames and non-'<' prefixed content.
+	limit := 4096
+
+	t.Run("partial octet-counted frame is emitted at EOF", func(t *testing.T) {
+		var contents []string
+		outputFn := func(msg *message.Message, _ int) {
+			if len(msg.GetContent()) > 0 {
+				contents = append(contents, string(msg.GetContent()))
+			}
+		}
+		tailerInfo := status.NewInfoRegistry()
+		fr := NewSyslogFramer(outputFn, limit, tailerInfo)
+
+		fr.Process(message.NewMessage([]byte("200 <134>partial"), nil, "", 0))
+		require.Empty(t, contents)
+
+		fr.Flush()
+		require.Len(t, contents, 1, "partial octet-counted frame should now be emitted at EOF")
+		assert.Equal(t, "200 <134>partial", contents[0])
+	})
+
+	t.Run("non-syslog content is emitted at EOF", func(t *testing.T) {
+		var contents []string
+		outputFn := func(msg *message.Message, _ int) {
+			if len(msg.GetContent()) > 0 {
+				contents = append(contents, string(msg.GetContent()))
+			}
+		}
+		tailerInfo := status.NewInfoRegistry()
+		fr := NewSyslogFramer(outputFn, limit, tailerInfo)
+
+		fr.Process(message.NewMessage([]byte("just plain text"), nil, "", 0))
+		require.Empty(t, contents)
+
+		fr.Flush()
+		require.Len(t, contents, 1)
+		assert.Equal(t, "just plain text", contents[0])
+	})
+}
+
+func TestSyslogOversizedZeroDataLoss(t *testing.T) {
+	// End-to-end verification that every byte of an oversized syslog stream
+	// appears in the output, regardless of framing method.
+	limit := 15
+
+	t.Run("octet-counted", func(t *testing.T) {
+		body := "<34>1 " + strings.Repeat("B", 40)
+		frame := fmt.Sprintf("%d %s", len(body), body)
+		// Follow with a delimited message so the framer can sync.
+		nextBody := "<34>1 next"
+		nextMsg := nextBody + "\n"
+		input := []byte(frame + nextMsg)
+
+		got, _ := processSyslog(t, limit, [][]byte{input})
+		require.True(t, len(got) >= 2, "expected split frames plus the next message")
+
+		// Concatenating ALL output should reproduce the full input
+		// (minus the trailing newline delimiter).
+		combined := strings.Join(got, "")
+		assert.Equal(t, frame+nextBody, combined)
+	})
+
+	t.Run("non-transparent", func(t *testing.T) {
+		body := "<34>1 " + strings.Repeat("C", 40) // 46 bytes
+		input := []byte(body + "\n")
+
+		got, _ := processSyslog(t, limit, [][]byte{input})
+		combined := strings.Join(got, "")
+		assert.Equal(t, body, combined)
+	})
 }
 
 func TestSyslogFramingIntegrationWithFramer(t *testing.T) {
