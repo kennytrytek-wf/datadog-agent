@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"net/http"
 	"net/url"
@@ -40,6 +41,7 @@ const (
 
 	metricPayloadType = "agent-metrics"
 	batchPayloadType  = "message-batch"
+	logsPayloadType   = "logs"
 
 	httpClientResetInterval = 5 * time.Minute
 	httpClientTimeout       = 10 * time.Second
@@ -53,6 +55,7 @@ type sender interface {
 
 	sendAgentMetricPayloads(ss *senderSession, metrics []*agentmetric)
 	sendEventPayload(ss *senderSession, eventInfo *Event, eventPayload map[string]interface{})
+	sendLogsBatch(ctx context.Context, batch []slog.Record) error
 }
 
 type client interface {
