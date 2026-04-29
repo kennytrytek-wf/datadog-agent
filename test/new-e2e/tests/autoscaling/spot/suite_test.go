@@ -150,6 +150,7 @@ func (s *spotSchedulingSuite) SetupSuite() {
 	// The cluster-agent ClusterRole is missing pods/eviction — a known issue to be fixed
 	// in the next Helm chart release.
 	s.patchClusterAgentEvictionRole()
+	s.patchClusterAgentStatefulSetRole()
 }
 
 func (s *spotSchedulingSuite) SetupTest() {
@@ -266,6 +267,21 @@ func (s *spotSchedulingSuite) deleteTestNamespace() {
 // in the next operator release.
 func (s *spotSchedulingSuite) patchClusterAgentEvictionRole() {
 	patch := []byte(`[{"op":"add","path":"/rules/-","value":{"apiGroups":[""],"resources":["pods/eviction"],"verbs":["create"]}}]`)
+	_, err := s.kubeClient.RbacV1().ClusterRoles().Patch(
+		s.T().Context(),
+		"dda-linux-datadog-cluster-agent",
+		types.JSONPatchType,
+		patch,
+		metav1.PatchOptions{},
+	)
+	s.Require().NoError(err)
+}
+
+// patchClusterAgentStatefulSetRole adds apps/statefulsets patch permission to the cluster-agent
+// ClusterRole. This is needed for the spot-disabled-until annotation to be written on StatefulSets
+// during on-demand fallback.
+func (s *spotSchedulingSuite) patchClusterAgentStatefulSetRole() {
+	patch := []byte(`[{"op":"add","path":"/rules/-","value":{"apiGroups":["apps"],"resources":["statefulsets"],"verbs":["patch"]}}]`)
 	_, err := s.kubeClient.RbacV1().ClusterRoles().Patch(
 		s.T().Context(),
 		"dda-linux-datadog-cluster-agent",

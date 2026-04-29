@@ -26,7 +26,7 @@ Run from the **repo root**. The test creates the kind cluster automatically and 
 DD_TEST_CLUSTER_AGENT_IMAGE=${USER}/cluster-agent:test \
   PULUMI_CONFIG_PASSPHRASE=dummy \
   dda inv new-e2e-tests.run --targets=./tests/autoscaling/spot/... \
-  -e "-test.timeout 10m"
+  -e "-test.timeout 25m"
 ```
 
 If `DD_TEST_CLUSTER_AGENT_IMAGE` is not set, tests are skipped.
