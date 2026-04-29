@@ -413,6 +413,65 @@ func TestSyslogParser_SIEMParsingDisabled(t *testing.T) {
 	assert.NotContains(t, data, "siem")
 }
 
+// ---------------------------------------------------------------------------
+// RFC 3164 §4.3.2: Valid PRI, no valid TIMESTAMP (e.g. Python SysLogHandler)
+// ---------------------------------------------------------------------------
+
+func TestSyslogParser_NoTimestamp(t *testing.T) {
+	parser := NewParser(true)
+
+	// Python's SysLogHandler produces <PRI>message with no TIMESTAMP/HOSTNAME.
+	input := newTestMessage([]byte("<132>Python SysLogHandler TCP test"))
+	result, err := parser.Parse(input)
+
+	// Must parse successfully (not a raw pass-through)
+	require.NoError(t, err)
+	assert.NotSame(t, input, result, "should return a new structured message, not the original")
+	assert.Equal(t, message.StateStructured, result.State)
+
+	// Status derived from PRI: 132 % 8 = 4 = warning
+	assert.Equal(t, message.StatusWarning, result.Status)
+
+	// Message body is the content after PRI
+	assert.Equal(t, "Python SysLogHandler TCP test", string(result.GetContent()))
+
+	// No source/service override (AppName is nilvalue per §4.3.2)
+	assert.Equal(t, "", result.ParsingExtra.SourceOverride)
+	assert.Equal(t, "", result.ParsingExtra.ServiceOverride)
+
+	// Timestamp is nilvalue (receiver supplies its own)
+	assert.Equal(t, "-", result.ParsingExtra.Timestamp)
+
+	// Render produces valid JSON with syslog metadata
+	rendered, err := result.Render()
+	require.NoError(t, err)
+
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal(rendered, &data))
+
+	assert.Equal(t, "Python SysLogHandler TCP test", data["message"])
+
+	syslog, ok := data["syslog"].(map[string]interface{})
+	require.True(t, ok, "syslog key missing")
+	assert.Equal(t, float64(16), syslog["facility"]) // 132 / 8
+	assert.Equal(t, float64(4), syslog["severity"])  // 132 % 8
+	assert.Equal(t, "-", syslog["hostname"])
+	assert.Equal(t, "-", syslog["appname"])
+}
+
+func TestSyslogParser_NoTimestamp_LeadingSpace(t *testing.T) {
+	parser := NewParser(true)
+
+	// Content starting with non-letter, non-digit after PRI.
+	input := newTestMessage([]byte("<134> message with leading space"))
+	result, err := parser.Parse(input)
+
+	require.NoError(t, err)
+	assert.Equal(t, message.StateStructured, result.State)
+	assert.Equal(t, " message with leading space", string(result.GetContent()))
+	assert.Equal(t, message.StatusInfo, result.Status) // 134 % 8 = 6 = info
+}
+
 func TestSyslogParser_MalformedSyslogDoesNotExtractSIEM(t *testing.T) {
 	parser := NewParser(true)
 	// Malformed PRI (non-digit) followed by valid CEF — syslog parse fails,

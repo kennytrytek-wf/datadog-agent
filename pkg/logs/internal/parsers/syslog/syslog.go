@@ -64,10 +64,9 @@ var (
 	errSDParamUnclosed = errors.New("SD-PARAM: unclosed '\"'")
 
 	// BSD-specific errors
-	errBSDTimestamp  = errors.New("BSD: invalid timestamp format")
-	errBSDMonth      = errors.New("BSD: unrecognized month abbreviation")
-	errBSDHostname   = errors.New("BSD: missing hostname")
-	errUnknownFormat = errors.New("unknown format: expected digit (RFC 5424) or letter (BSD) after PRI")
+	errBSDTimestamp = errors.New("BSD: invalid timestamp format")
+	errBSDMonth     = errors.New("BSD: unrecognized month abbreviation")
+	errBSDHostname  = errors.New("BSD: missing hostname")
 )
 
 const nilvalue = "-"
@@ -182,7 +181,10 @@ func Parse(line []byte) (SyslogMessage, error) {
 	case (b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z'):
 		msg, err = parseBSD(line, pri, pos)
 	default:
-		return SyslogMessage{Pri: pri, Msg: line, Partial: true}, errUnknownFormat
+		// RFC 3164 §4.3.2: valid PRI, but what follows is neither a digit
+		// (RFC 5424 VERSION) nor a letter (BSD TIMESTAMP month). Treat the
+		// remainder as MSG CONTENT with no TIMESTAMP, HOSTNAME, or TAG.
+		return parseBSDNoTimestamp(line, pri, pos), nil
 	}
 
 	// Apply PRI range warning — join with any downstream error so neither is lost.
@@ -349,6 +351,23 @@ func parseRFC5424(line []byte, pri int, pos int) (SyslogMessage, error) {
 // BSD (RFC 3164) parsing
 // ---------------------------------------------------------------------------
 
+// parseBSDNoTimestamp implements RFC 3164 Section 4.3.2: a message with a valid
+// PRI but no valid TIMESTAMP. Per the RFC, the receiver treats the remainder
+// after PRI as the CONTENT field of the MSG. TAG "cannot be determined and will
+// not be included." TIMESTAMP and HOSTNAME are left as nilvalue for the caller
+// to fill from receiver-local context (current time, sender address).
+func parseBSDNoTimestamp(line []byte, pri int, pos int) SyslogMessage {
+	return SyslogMessage{
+		Pri:       pri,
+		Timestamp: nilvalue,
+		Hostname:  nilvalue,
+		AppName:   nilvalue,
+		ProcID:    nilvalue,
+		MsgID:     nilvalue,
+		Msg:       line[pos:],
+	}
+}
+
 // parseBSD parses a BSD syslog message starting at line[pos]. PRI has already
 // been extracted (pri=-1 for file input where PRI is absent).
 //
@@ -368,6 +387,11 @@ func parseBSD(line []byte, pri int, pos int) (SyslogMessage, error) {
 	// --- TIMESTAMP: exactly 15 bytes ---
 	// Format: Mmm dd hh:mm:ss  (or Mmm  d hh:mm:ss for single-digit day)
 	if pos+15 > len(line) {
+		if pos < len(line) && pri >= 0 {
+			// RFC 3164 §4.3.2: valid PRI, content present but too short
+			// for a BSD timestamp. Treat remainder as MSG CONTENT.
+			return parseBSDNoTimestamp(line, pri, pos), nil
+		}
 		if pos < len(line) {
 			msg.Msg = line[pos:]
 		}
@@ -377,7 +401,11 @@ func parseBSD(line []byte, pri int, pos int) (SyslogMessage, error) {
 
 	tsRaw := line[pos : pos+15]
 	if !isValidBSDTimestamp(tsRaw) {
-		// Invalid month — stuff everything into MSG.
+		if pri >= 0 {
+			// RFC 3164 §4.3.2: valid PRI, content present but no valid
+			// timestamp. Treat remainder as MSG CONTENT.
+			return parseBSDNoTimestamp(line, pri, pos), nil
+		}
 		msg.Msg = line[pos:]
 		msg.Partial = true
 		return msg, errBSDMonth
