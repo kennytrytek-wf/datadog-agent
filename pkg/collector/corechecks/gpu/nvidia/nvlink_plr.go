@@ -65,7 +65,7 @@ func (c *nvlinkPLRCollector) DeviceUUID() string {
 }
 
 func (c *nvlinkPLRCollector) Name() CollectorName {
-	return "nvlink"
+	return CollectorName(fmt.Sprintf("%s.%d", nvlinkPLR, c.port)) // keep unique names for each port
 }
 
 func (c *nvlinkPLRCollector) Collect() ([]Metric, error) {
