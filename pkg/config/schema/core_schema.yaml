@@ -2232,6 +2232,18 @@ properties:
             node_type: setting
             type: boolean
             default: false
+          exclude:
+            node_type: setting
+            type: array
+            default: []
+            items:
+              type: object
+          include:
+            node_type: setting
+            type: array
+            default: []
+            items:
+              type: object
           match_threshold:
             node_type: setting
             type: number
@@ -2246,10 +2258,16 @@ properties:
             node_type: setting
             type: number
             default: 1
+            tags:
+            - golang_type:float64
           tokenizer_max_input_bytes:
             node_type: setting
             type: number
             default: 2048
+          protect_important_logs:
+            node_type: setting
+            type: boolean
+            default: true
       file_scan_period:
         node_type: setting
         type: number
