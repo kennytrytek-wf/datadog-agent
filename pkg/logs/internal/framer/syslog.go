@@ -31,9 +31,11 @@ import (
 // ('1'-'9') selects octet counting, '<' (start of PRI) selects
 // non-transparent framing. Stray whitespace/NUL between frames is consumed.
 type syslogFrameMatcher struct {
-	contentLenLimit int
-	discardedBytes  *status.CountInfo
-	oversizedFrames *status.CountInfo
+	contentLenLimit  int
+	lastWasTruncated bool
+	flushSplit       bool
+	discardedBytes   *status.CountInfo
+	oversizedFrames  *status.CountInfo
 }
 
 // FindFrame implements FrameMatcher. It looks for a complete syslog frame
@@ -51,19 +53,35 @@ func (m *syslogFrameMatcher) FindFrame(buf []byte, seen int) ([]byte, int, bool)
 	}
 
 	b := buf[0]
+	var content []byte
+	var rawDataLen int
+	var wasTruncated bool
+
 	switch {
 	case b >= '1' && b <= '9':
-		return m.findOctetCounted(buf)
+		content, rawDataLen, wasTruncated = m.findOctetCounted(buf)
 
 	case b == '<':
-		return m.findNonTransparent(buf, seen)
+		content, rawDataLen, wasTruncated = m.findNonTransparent(buf, seen)
 
 	case b == '\n' || b == '\r' || b == 0:
 		return buf[:0], 1, false
 
 	default:
-		return m.findMalformed(buf)
+		content, rawDataLen, wasTruncated = m.findMalformed(buf)
 	}
+
+	if content == nil {
+		return nil, 0, false
+	}
+
+	isSplitChunk := wasTruncated
+	if m.lastWasTruncated {
+		wasTruncated = true
+	}
+	m.lastWasTruncated = isSplitChunk
+
+	return content, rawDataLen, wasTruncated
 }
 
 // findMalformed handles bytes that don't start a valid syslog frame. It scans
@@ -198,17 +216,27 @@ func (m *syslogFrameMatcher) findNonTransparent(buf []byte, seen int) ([]byte, i
 // is drained.
 func (m *syslogFrameMatcher) FlushFrame(buf []byte) ([]byte, int) {
 	if len(buf) == 0 {
+		m.flushSplit = false
 		return nil, 0
 	}
 	content := syslogTrimTrailer(buf)
 	if len(content) == 0 {
+		m.flushSplit = false
 		return nil, 0
 	}
 	if len(content) > m.contentLenLimit {
+		m.flushSplit = true
 		m.recordOversized()
 		return content[:m.contentLenLimit], m.contentLenLimit
 	}
 	return content, len(buf)
+}
+
+// IsSplitInProgress returns true if the most recently emitted frame was part
+// of a split sequence. Used by Framer.Flush to mark the final chunk of a
+// split as truncated even when rawDataLen == len(buf).
+func (m *syslogFrameMatcher) IsSplitInProgress() bool {
+	return m.lastWasTruncated || m.flushSplit
 }
 
 // recordDiscarded increments both the global telemetry counter and the

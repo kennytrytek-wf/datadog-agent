@@ -242,6 +242,14 @@ func (fr *Framer) normalizeBuffer() {
 	}
 }
 
+// splitTracker is an optional interface that matchers can implement to signal
+// that the most recently emitted frame was part of a split sequence. This
+// allows Flush to mark the final chunk as truncated even when rawDataLen
+// equals the remaining buffer length.
+type splitTracker interface {
+	IsSplitInProgress() bool
+}
+
 // Flush emits any unframed remainder left in the buffer by delegating to the
 // matcher's FlushFrame in a loop. Called by the decoder at end-of-stream
 // (e.g. when a TCP connection closes). The loop allows matchers to emit
@@ -259,6 +267,9 @@ func (fr *Framer) Flush() {
 			break
 		}
 		isTruncated := rawDataLen < len(buf)
+		if st, ok := fr.matcher.(splitTracker); ok && st.IsSplitInProgress() {
+			isTruncated = true
+		}
 		fr.emitFrame(fr.lastInput, content, rawDataLen, isTruncated)
 		fr.bytesFramed += rawDataLen
 	}

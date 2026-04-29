@@ -494,6 +494,142 @@ func TestSyslogMalformedFrameEmission(t *testing.T) {
 	})
 }
 
+func TestSyslogSplitTruncationFlags(t *testing.T) {
+	t.Run("octet-counted split marks all chunks truncated", func(t *testing.T) {
+		limit := 15
+		body := "<34>1 " + strings.Repeat("B", 40) // 46 bytes
+		frame := fmt.Sprintf("%d %s", len(body), body)
+		nextMsg := "<34>1 next"
+		input := []byte(frame + nextMsg + "\n")
+
+		tailerInfo := status.NewInfoRegistry()
+		var contents []string
+		var truncated []bool
+		outputFn := func(msg *message.Message, _ int) {
+			if len(msg.GetContent()) > 0 {
+				contents = append(contents, string(msg.GetContent()))
+				truncated = append(truncated, msg.ParsingExtra.IsTruncated)
+			}
+		}
+		fr := NewSyslogFramer(outputFn, limit, tailerInfo)
+		fr.Process(message.NewMessage(input, nil, "", 0))
+
+		require.True(t, len(contents) >= 3, "expected split chunks plus next message, got %d: %v", len(contents), contents)
+
+		lastIdx := len(contents) - 1
+		for i := 0; i < lastIdx; i++ {
+			assert.True(t, truncated[i], "chunk %d (%q) should be truncated", i, contents[i])
+		}
+		assert.False(t, truncated[lastIdx], "next independent message (%q) should NOT be truncated", contents[lastIdx])
+		assert.Equal(t, nextMsg, contents[lastIdx])
+	})
+
+	t.Run("non-transparent split marks all chunks truncated", func(t *testing.T) {
+		limit := 15
+		body := "<34>1 " + strings.Repeat("C", 40) // 46 bytes
+		nextMsg := "<34>1 next"
+		input := []byte(body + "\n" + nextMsg + "\n")
+
+		tailerInfo := status.NewInfoRegistry()
+		var contents []string
+		var truncated []bool
+		outputFn := func(msg *message.Message, _ int) {
+			if len(msg.GetContent()) > 0 {
+				contents = append(contents, string(msg.GetContent()))
+				truncated = append(truncated, msg.ParsingExtra.IsTruncated)
+			}
+		}
+		fr := NewSyslogFramer(outputFn, limit, tailerInfo)
+		fr.Process(message.NewMessage(input, nil, "", 0))
+
+		require.True(t, len(contents) >= 3, "expected split chunks plus next message, got %d: %v", len(contents), contents)
+
+		lastIdx := len(contents) - 1
+		for i := 0; i < lastIdx; i++ {
+			assert.True(t, truncated[i], "chunk %d (%q) should be truncated", i, contents[i])
+		}
+		assert.False(t, truncated[lastIdx], "next independent message (%q) should NOT be truncated", contents[lastIdx])
+		assert.Equal(t, nextMsg, contents[lastIdx])
+	})
+
+	t.Run("malformed split marks all chunks truncated", func(t *testing.T) {
+		limit := 10
+		junk := strings.Repeat("Z", 25)
+		validMsg := "<34>1 msg"
+		input := []byte(junk + validMsg + "\n")
+
+		tailerInfo := status.NewInfoRegistry()
+		var contents []string
+		var truncated []bool
+		outputFn := func(msg *message.Message, _ int) {
+			if len(msg.GetContent()) > 0 {
+				contents = append(contents, string(msg.GetContent()))
+				truncated = append(truncated, msg.ParsingExtra.IsTruncated)
+			}
+		}
+		fr := NewSyslogFramer(outputFn, limit, tailerInfo)
+		fr.Process(message.NewMessage(input, nil, "", 0))
+
+		require.True(t, len(contents) >= 3, "expected split malformed chunks plus valid, got %d: %v", len(contents), contents)
+
+		lastIdx := len(contents) - 1
+		for i := 0; i < lastIdx; i++ {
+			assert.True(t, truncated[i], "chunk %d (%q) should be truncated", i, contents[i])
+		}
+		assert.False(t, truncated[lastIdx], "valid message (%q) should NOT be truncated", contents[lastIdx])
+		assert.Equal(t, validMsg, contents[lastIdx])
+	})
+
+	t.Run("flush continuation inherits truncation from split", func(t *testing.T) {
+		// Octet-counted frame whose body exceeds the limit. After the
+		// first split chunk the continuation bytes (all 'x') have no
+		// syslog sync point, so they stay buffered until Flush.
+		limit := 15
+		body := "<34>1 " + strings.Repeat("x", 14) // 20 bytes
+		frame := fmt.Sprintf("%d %s", len(body), body)
+		input := []byte(frame) // no following message — forces Flush path
+
+		tailerInfo := status.NewInfoRegistry()
+		var contents []string
+		var truncated []bool
+		outputFn := func(msg *message.Message, _ int) {
+			if len(msg.GetContent()) > 0 {
+				contents = append(contents, string(msg.GetContent()))
+				truncated = append(truncated, msg.ParsingExtra.IsTruncated)
+			}
+		}
+		fr := NewSyslogFramer(outputFn, limit, tailerInfo)
+		fr.Process(message.NewMessage(input, nil, "", 0))
+		require.Len(t, contents, 1, "first split chunk emitted by Process")
+		assert.True(t, truncated[0], "split chunk should be truncated")
+
+		fr.Flush()
+		require.Len(t, contents, 2, "continuation emitted by Flush")
+		assert.True(t, truncated[1], "flush continuation should be truncated")
+
+		combined := strings.Join(contents, "")
+		assert.Equal(t, frame, combined)
+	})
+
+	t.Run("non-split frame is not truncated", func(t *testing.T) {
+		msg := "<34>1 host app - - - hello"
+		input := []byte(msg + "\n")
+
+		tailerInfo := status.NewInfoRegistry()
+		var truncated []bool
+		outputFn := func(msg *message.Message, _ int) {
+			if len(msg.GetContent()) > 0 {
+				truncated = append(truncated, msg.ParsingExtra.IsTruncated)
+			}
+		}
+		fr := NewSyslogFramer(outputFn, 4096, tailerInfo)
+		fr.Process(message.NewMessage(input, nil, "", 0))
+
+		require.Len(t, truncated, 1)
+		assert.False(t, truncated[0])
+	})
+}
+
 func TestSyslogTrimTrailer(t *testing.T) {
 	tests := []struct {
 		name  string
