@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/DataDog/datadog-agent/comp/observer/impl/patterns"
+	"github.com/DataDog/datadog-agent/comp/anomalydetection/observer/impl/patterns"
 )
 
 // splitTagKeyOrder is the canonical ordered list of tag dimensions used to split
