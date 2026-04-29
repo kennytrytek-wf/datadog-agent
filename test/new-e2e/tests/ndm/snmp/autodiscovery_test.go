@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/DataDog/datadog-agent/test/e2e-framework/components/datadog/agentparams"
+	"github.com/DataDog/datadog-agent/test/e2e-framework/components/os"
 	scenec2 "github.com/DataDog/datadog-agent/test/e2e-framework/scenarios/aws/ec2"
 	"github.com/DataDog/datadog-agent/test/e2e-framework/testing/e2e"
 	"github.com/DataDog/datadog-agent/test/e2e-framework/testing/environments"
@@ -27,6 +28,7 @@ type autoDiscoverySuite struct {
 func autoDiscoverySuiteProvisioner(agentConfig string) provisioners.Provisioner {
 	return awshost.Provisioner(
 		awshost.WithRunOptions(
+			scenec2.WithEC2InstanceOptions(scenec2.WithOS(os.Ubuntu2204E2E)),
 			scenec2.WithDocker(),
 			scenec2.WithAgentOptions(agentparams.WithAgentConfig(agentConfig)),
 		),

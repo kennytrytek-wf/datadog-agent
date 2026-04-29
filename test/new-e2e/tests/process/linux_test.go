@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/DataDog/datadog-agent/test/e2e-framework/components/datadog/agentparams"
+	"github.com/DataDog/datadog-agent/test/e2e-framework/components/os"
 	scenec2 "github.com/DataDog/datadog-agent/test/e2e-framework/scenarios/aws/ec2"
 
 	"github.com/DataDog/datadog-agent/pkg/util/testutil/flake"
@@ -36,7 +37,10 @@ func TestLinuxTestSuite(t *testing.T) {
 	}
 
 	options := []e2e.SuiteOption{
-		e2e.WithProvisioner(awshost.Provisioner(awshost.WithRunOptions(scenec2.WithAgentOptions(agentParams...)))),
+		e2e.WithProvisioner(awshost.Provisioner(awshost.WithRunOptions(
+			scenec2.WithEC2InstanceOptions(scenec2.WithOS(os.Ubuntu2204E2E)),
+			scenec2.WithAgentOptions(agentParams...),
+		))),
 	}
 
 	e2e.Run(t, &linuxTestSuite{}, options...)
