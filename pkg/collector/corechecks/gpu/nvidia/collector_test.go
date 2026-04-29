@@ -9,6 +9,7 @@ package nvidia
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
@@ -357,7 +358,13 @@ func TestDisabledCollectors(t *testing.T) {
 			collectorCounts := make(map[CollectorName]int)
 			for _, collector := range collectors {
 				collectorNames[collector.Name()] = true
-				collectorCounts[collector.Name()]++
+				collectorName := collector.Name()
+				collectorCounts[collectorName]++
+				// NVLink PLR collectors are now port-qualified (e.g. nvlink.plr.1),
+				// so aggregate them under "nvlink" for group-level test assertions.
+				if strings.HasPrefix(string(collectorName), string(nvlinkPLR)+".") {
+					collectorCounts[nvlink]++
+				}
 			}
 
 			for _, expectedName := range tt.expectedCollectorNames {
