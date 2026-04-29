@@ -15,17 +15,14 @@ import (
 	ddnvml "github.com/DataDog/datadog-agent/pkg/gpu/safenvml"
 )
 
-type nvlinkCollector interface {
-	Collector
-	Port() int
-}
-
+// nvlinkCollectorBuilder is a function that creates a new NVLink collector for a given device and port.
 type nvlinkCollectorBuilder func(device ddnvml.Device, port int, deps *CollectorDependencies) (Collector, error)
 
 var nvlinkBuilders = map[CollectorName]nvlinkCollectorBuilder{
 	nvlinkPLR: newNVLinkPLRCollector,
 }
 
+// getNvlinkBuilders returns a list of functions to create all the collectors required for the ports of a given device
 func getNvlinkBuilders(device ddnvml.Device) ([]subsystemBuilder, error) {
 	totalPorts, err := getNVLinkCount(device)
 	if err != nil {
@@ -67,6 +64,7 @@ func getNVLinkCount(device ddnvml.Device) (int, error) {
 	return totalPorts, nil
 }
 
+// portTag is a shorthand function to create a tag for the NVLink port number
 func portTag(port int) string {
 	return fmt.Sprintf("nvlink_port:%d", port)
 }
