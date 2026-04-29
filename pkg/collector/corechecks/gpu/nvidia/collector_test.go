@@ -43,9 +43,83 @@ func TestCollectorsStillInitIfOneFails(t *testing.T) {
 	devices, err := deviceCache.AllPhysicalDevices()
 	require.NoError(t, err)
 	deps := &CollectorDependencies{}
-	collectors, err := buildCollectors(devices, deps, map[CollectorName]subsystemBuilder{"ok": factory, "fail": factory}, nil)
+	collectors, err := buildCollectors(devices, deps, []subsystemBuilder{
+		{builder: factory, name: "ok"},
+		{builder: factory, name: "fail"},
+	}, nil, nil)
 	require.NotNil(t, collectors)
 	require.NoError(t, err)
+}
+
+func TestBuildCollectorsIncludesDynamicBuilders(t *testing.T) {
+	device := setupMockDevice(t, nil)
+	deps := &CollectorDependencies{}
+
+	staticCalls := 0
+	dynamicCalls := 0
+
+	dynamicBuilderName := CollectorName("dynamic_test")
+	testDynamicBuilders := []dynamicSubsystemBuilder{
+		{
+			name: dynamicBuilderName,
+			getBuilders: func(_ ddnvml.Device) ([]subsystemBuilder, error) {
+				return []subsystemBuilder{
+					{
+						name: dynamicBuilderName,
+						builder: func(_ ddnvml.Device, _ *CollectorDependencies) (Collector, error) {
+							dynamicCalls++
+							return &mockCollector{}, nil
+						},
+					},
+				}, nil
+			},
+		},
+	}
+
+	collectors, err := buildCollectors([]ddnvml.Device{device}, deps, []subsystemBuilder{
+		{
+			name: "static_test",
+			builder: func(_ ddnvml.Device, _ *CollectorDependencies) (Collector, error) {
+				staticCalls++
+				return &mockCollector{}, nil
+			},
+		},
+	}, testDynamicBuilders, nil)
+
+	require.NoError(t, err)
+	require.Len(t, collectors, 2)
+	require.Equal(t, 1, staticCalls)
+	require.Equal(t, 1, dynamicCalls)
+}
+
+func TestBuildCollectorsContinuesWhenDynamicBuilderLookupFails(t *testing.T) {
+	device := setupMockDevice(t, nil)
+	deps := &CollectorDependencies{}
+
+	staticCalls := 0
+
+	testDynamicBuilders := []dynamicSubsystemBuilder{
+		{
+			name: "dynamic_lookup_error",
+			getBuilders: func(_ ddnvml.Device) ([]subsystemBuilder, error) {
+				return nil, errors.New("dynamic lookup failed")
+			},
+		},
+	}
+
+	collectors, err := buildCollectors([]ddnvml.Device{device}, deps, []subsystemBuilder{
+		{
+			name: "static_test",
+			builder: func(_ ddnvml.Device, _ *CollectorDependencies) (Collector, error) {
+				staticCalls++
+				return &mockCollector{}, nil
+			},
+		},
+	}, testDynamicBuilders, nil)
+
+	require.NoError(t, err)
+	require.Len(t, collectors, 1)
+	require.Equal(t, 1, staticCalls)
 }
 
 func TestGetDeviceTagsMapping(t *testing.T) {
@@ -174,9 +248,9 @@ func TestAllCollectorsWork(t *testing.T) {
 	}
 
 	// We should have seen all the collectors
-	for name := range factory {
-		_, ok := seenCollectors[name]
-		require.True(t, ok, "collector %s not seen", name)
+	for _, builder := range factory {
+		_, ok := seenCollectors[builder.name]
+		require.True(t, ok, "collector %s not seen", builder.name)
 	}
 }
 
@@ -186,39 +260,62 @@ func TestDisabledCollectors(t *testing.T) {
 		disabledCollectors     []string
 		expectedCollectorCount int
 		expectedCollectorNames []CollectorName
+		expectedCountsByName   map[CollectorName]int
 		unexpectedNames        []CollectorName
 	}{
 		{
 			name:                   "no collectors disabled",
 			disabledCollectors:     []string{},
-			expectedCollectorCount: 6, // stateless, sampling, fields, gpm, device_events, nvlink
-			expectedCollectorNames: []CollectorName{stateless, sampling, field, gpm, deviceEvents, nvlink},
+			expectedCollectorCount: 7, // stateless, sampling, fields, gpm, device_events + 2 nvlink dynamic collectors
+			expectedCollectorNames: []CollectorName{stateless, sampling, field, gpm, deviceEvents},
+			expectedCountsByName:   map[CollectorName]int{nvlink: 2},
 		},
 		{
 			name:                   "disable gpm collector",
 			disabledCollectors:     []string{"gpm"},
-			expectedCollectorCount: 5,
-			expectedCollectorNames: []CollectorName{stateless, sampling, field, deviceEvents, nvlink},
+			expectedCollectorCount: 6,
+			expectedCollectorNames: []CollectorName{stateless, sampling, field, deviceEvents},
+			expectedCountsByName:   map[CollectorName]int{nvlink: 2},
 			unexpectedNames:        []CollectorName{gpm},
 		},
 		{
 			name:                   "disable multiple collectors",
 			disabledCollectors:     []string{"gpm", "fields"},
-			expectedCollectorCount: 4,
-			expectedCollectorNames: []CollectorName{stateless, sampling, deviceEvents, nvlink},
+			expectedCollectorCount: 5,
+			expectedCollectorNames: []CollectorName{stateless, sampling, deviceEvents},
+			expectedCountsByName:   map[CollectorName]int{nvlink: 2},
 			unexpectedNames:        []CollectorName{gpm, field},
 		},
 		{
+			name:                   "disable dynamic nvlink collector",
+			disabledCollectors:     []string{"nvlink.plr"},
+			expectedCollectorCount: 5, // disable via dynamic sub-builder name
+			expectedCollectorNames: []CollectorName{stateless, sampling, field, gpm, deviceEvents},
+			expectedCountsByName:   map[CollectorName]int{nvlink: 0},
+			unexpectedNames:        []CollectorName{nvlink},
+		},
+		{
+			name:                   "disable nvlink dynamic group",
+			disabledCollectors:     []string{"nvlink"},
+			expectedCollectorCount: 5,
+			expectedCollectorNames: []CollectorName{stateless, sampling, field, gpm, deviceEvents},
+			expectedCountsByName:   map[CollectorName]int{nvlink: 0},
+			unexpectedNames:        []CollectorName{nvlink},
+		},
+		{
 			name:                   "disable all collectors",
-			disabledCollectors:     []string{"stateless", "sampling", "fields", "gpm", "device_events", "nvlink"},
-			expectedCollectorCount: 0,
+			disabledCollectors:     []string{"stateless", "sampling", "fields", "gpm", "device_events", "nvlink", "nvlink.plr"},
+			expectedCollectorCount: 0, // also disable dynamic nvlink builders
 			expectedCollectorNames: []CollectorName{},
+			expectedCountsByName:   map[CollectorName]int{nvlink: 0},
+			unexpectedNames:        []CollectorName{nvlink},
 		},
 		{
 			name:                   "disable non-existent collector",
 			disabledCollectors:     []string{"non_existent"},
-			expectedCollectorCount: 6,
-			expectedCollectorNames: []CollectorName{stateless, sampling, field, gpm, deviceEvents, nvlink},
+			expectedCollectorCount: 7,
+			expectedCollectorNames: []CollectorName{stateless, sampling, field, gpm, deviceEvents},
+			expectedCountsByName:   map[CollectorName]int{nvlink: 2},
 		},
 	}
 
@@ -257,8 +354,10 @@ func TestDisabledCollectors(t *testing.T) {
 
 			// Verify the correct collectors were created
 			collectorNames := make(map[CollectorName]bool)
+			collectorCounts := make(map[CollectorName]int)
 			for _, collector := range collectors {
 				collectorNames[collector.Name()] = true
+				collectorCounts[collector.Name()]++
 			}
 
 			for _, expectedName := range tt.expectedCollectorNames {
@@ -270,6 +369,11 @@ func TestDisabledCollectors(t *testing.T) {
 			for _, unexpectedName := range tt.unexpectedNames {
 				require.False(t, collectorNames[unexpectedName],
 					"collector %s should not be created", unexpectedName)
+			}
+
+			// Verify collector multiplicity where relevant (e.g., dynamic per-port collectors).
+			for name, expectedCount := range tt.expectedCountsByName {
+				require.Equal(t, expectedCount, collectorCounts[name], "unexpected collector count for %s", name)
 			}
 		})
 	}
@@ -544,8 +648,8 @@ func TestConfiguredMetricPriority(t *testing.T) {
 		Workloadmeta:     testutil.GetWorkloadMetaMockWithDefaultGPUs(t),
 	}
 
-	// Build collectors with deviceEvents disabled (not useful for this test)
-	collectors, err := BuildCollectors([]ddnvml.Device{device}, deps, []string{string(deviceEvents)})
+	// Build collectors with deviceEvents and nvlink.plr disabled (not useful for this test).
+	collectors, err := BuildCollectors([]ddnvml.Device{device}, deps, []string{string(deviceEvents), string(nvlinkPLR)})
 	require.NoError(t, err)
 
 	// Set up the expected metric order. The first collector in the list should have the highest priority over the rest.

@@ -16,7 +16,7 @@ import (
 	"errors"
 	"slices"
 
-	"github.com/DataDog/datadog-agent/comp/core/telemetry/def"
+	telemetry "github.com/DataDog/datadog-agent/comp/core/telemetry/def"
 	workloadmeta "github.com/DataDog/datadog-agent/comp/core/workloadmeta/def"
 	"github.com/DataDog/datadog-agent/pkg/gpu/config/consts"
 	ddnvml "github.com/DataDog/datadog-agent/pkg/gpu/safenvml"
@@ -38,23 +38,38 @@ const (
 	ebpf         CollectorName = "ebpf"
 	deviceEvents CollectorName = "device_events"
 	nvlink       CollectorName = "nvlink"
+
+	// nvlink sub-collectors
+	nvlinkPLR CollectorName = "nvlink.plr"
 )
 
 // subsystemBuilder is a function that creates a new subsystem Collector. device the device it should collect metrics from. It also receives
 // the tags associated with the device, the collector should use them when generating metrics.
-type subsystemBuilder func(device ddnvml.Device, deps *CollectorDependencies) (Collector, error)
+type subsystemBuilder struct {
+	builder func(device ddnvml.Device, deps *CollectorDependencies) (Collector, error)
+	name    CollectorName
+}
 
-// factory is a map of all the subsystems that can be used to collect metrics from NVML.
-var factory = map[CollectorName]subsystemBuilder{
+type dynamicSubsystemBuilder struct {
+	getBuilders func(device ddnvml.Device) ([]subsystemBuilder, error)
+	name        CollectorName
+}
+
+// factory is a list of all the subsystems that can be used to collect metrics from NVML.
+var factory = []subsystemBuilder{
 	// Consolidated collectors that combine multiple collector types into single instances
-	stateless: newStatelessCollector, // Consolidates memory, device, clocks, remappedrows
-	sampling:  newSamplingCollector,  // Consolidates process, samples
+	{builder: newStatelessCollector, name: stateless}, // Consolidates memory, device, clocks, remappedrows
+	{builder: newSamplingCollector, name: sampling},   // Consolidates process, samples
 
 	// Specialized collectors that remain unchanged (complex or unique logic)
-	field:        newFieldsCollector,
-	nvlink:       newNVLinkCollector,
-	gpm:          newGPMCollector,
-	deviceEvents: newDeviceEventsCollector,
+	{builder: newFieldsCollector, name: field},
+	{builder: newGPMCollector, name: gpm},
+	{builder: newDeviceEventsCollector, name: deviceEvents},
+}
+
+// dynamicBuilders is a list of subsystem builders that will generate multiple collectors to create for a given device
+var dynamicBuilders = []dynamicSubsystemBuilder{
+	{getBuilders: getNvlinkBuilders, name: nvlink},
 }
 
 // CollectorDependencies holds the dependencies needed to create a set of collectors.
@@ -73,47 +88,64 @@ type CollectorDependencies struct {
 // If SystemProbeCache is provided, additional system-probe virtual collectors will be created for all devices.
 // disabledCollectors is a list of collector names that should not be created.
 func BuildCollectors(devices []ddnvml.Device, deps *CollectorDependencies, disabledCollectors []string) ([]Collector, error) {
-	return buildCollectors(devices, deps, factory, disabledCollectors)
+	return buildCollectors(devices, deps, factory, dynamicBuilders, disabledCollectors)
 }
 
-func buildCollectors(devices []ddnvml.Device, deps *CollectorDependencies, builders map[CollectorName]subsystemBuilder, disabledCollectors []string) ([]Collector, error) {
+func buildCollectors(devices []ddnvml.Device, deps *CollectorDependencies, builders []subsystemBuilder, dynamicBuilders []dynamicSubsystemBuilder, disabledCollectors []string) ([]Collector, error) {
 	if len(devices) == 0 {
 		return nil, nil
 	}
 
 	var collectors []Collector
 
-	// Check that the disabled collectors are valid
+	// Keep track of the disabled collectors and which ones were not found in the builders list
+	hasCollectorBeenDisabled := make(map[CollectorName]bool)
 	for _, disabled := range disabledCollectors {
-		if _, ok := builders[CollectorName(disabled)]; !ok {
-			log.Warnf("invalid disabled collector: %s", disabled)
-			continue
-		}
+		hasCollectorBeenDisabled[CollectorName(disabled)] = false
 	}
 
 	// Step 1: Build NVML collectors for physical devices only,
 	// (since most of NVML API doesn't support MIG devices)
 	for _, dev := range devices {
-		for name, builder := range builders {
+		allBuilders := slices.Clone(builders)
+		for _, dynamicBuilder := range dynamicBuilders {
 			// Skip disabled collectors
-			if slices.Contains(disabledCollectors, string(name)) {
-				log.Debugf("Skipping disabled collector %s for device %s", name, dev.GetDeviceInfo().UUID)
-				deps.Telemetry.addCollectorCreation(name, "disabled")
+			if _, shouldBeDisabled := hasCollectorBeenDisabled[dynamicBuilder.name]; shouldBeDisabled {
+				hasCollectorBeenDisabled[dynamicBuilder.name] = true
+				log.Debugf("Skipping disabled collector %s for device %s", dynamicBuilder.name, dev.GetDeviceInfo().UUID)
+				deps.Telemetry.addCollectorCreation(dynamicBuilder.name, "disabled")
 				continue
 			}
 
-			c, err := builder(dev, deps)
+			dynamicBuilders, err := dynamicBuilder.getBuilders(dev)
+			if err != nil {
+				log.Warnf("failed to get dynamic builders for device %s: %s", dev.GetDeviceInfo().UUID, err)
+				continue
+			}
+			allBuilders = append(allBuilders, dynamicBuilders...)
+		}
+
+		for _, builder := range allBuilders {
+			// Skip disabled collectors
+			if _, shouldBeDisabled := hasCollectorBeenDisabled[builder.name]; shouldBeDisabled {
+				hasCollectorBeenDisabled[builder.name] = true
+				log.Debugf("Skipping disabled collector %s for device %s", builder.name, dev.GetDeviceInfo().UUID)
+				deps.Telemetry.addCollectorCreation(builder.name, "disabled")
+				continue
+			}
+
+			c, err := builder.builder(dev, deps)
 			if errors.Is(err, errUnsupportedDevice) {
-				log.Warnf("device %s does not support collector %s", dev.GetDeviceInfo().UUID, name)
-				deps.Telemetry.addCollectorCreation(name, "unsupported")
+				log.Warnf("device %s does not support collector %s", dev.GetDeviceInfo().UUID, builder.name)
+				deps.Telemetry.addCollectorCreation(builder.name, "unsupported")
 				continue
 			} else if err != nil {
-				log.Warnf("failed to create collector %s for device %s: %s", name, dev.GetDeviceInfo().UUID, err)
-				deps.Telemetry.addCollectorCreation(name, "error")
+				log.Warnf("failed to create collector %s for device %s: %s", builder.name, dev.GetDeviceInfo().UUID, err)
+				deps.Telemetry.addCollectorCreation(builder.name, "error")
 				continue
 			}
 
-			deps.Telemetry.addCollectorCreation(name, "success")
+			deps.Telemetry.addCollectorCreation(builder.name, "success")
 			collectors = append(collectors, c)
 		}
 	}
@@ -137,6 +169,14 @@ func buildCollectors(devices []ddnvml.Device, deps *CollectorDependencies, build
 				deps.Telemetry.addCollectorCreation(ebpf, "success")
 				collectors = append(collectors, spCollector)
 			}
+		}
+	}
+
+	// Warn on collector that were marked to be disabled but were never found, in case it's
+	// a typo in the settings
+	for collectorName, disabled := range hasCollectorBeenDisabled {
+		if !disabled {
+			log.Warnf("collector %s was marked to be disabled but was never found, this is likely a typo in the settings", collectorName)
 		}
 	}
 
