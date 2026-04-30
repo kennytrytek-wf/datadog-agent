@@ -41,6 +41,7 @@ const (
 
 	// nvlink sub-collectors
 	nvlinkPLR CollectorName = "nvlink.plr"
+	nvlinkFEC CollectorName = "nvlink.fec"
 )
 
 // subsystemBuilder is a function that creates a new subsystem Collector. device the device it should collect metrics from. It also receives

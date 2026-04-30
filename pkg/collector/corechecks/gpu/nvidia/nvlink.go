@@ -20,6 +20,7 @@ type nvlinkCollectorBuilder func(device ddnvml.Device, port int, deps *Collector
 
 var nvlinkBuilders = map[CollectorName]nvlinkCollectorBuilder{
 	nvlinkPLR: newNVLinkPLRCollector,
+	nvlinkFEC: newNVLinkFECCollector,
 }
 
 // getNvlinkBuilders returns a list of functions to create all the collectors required for the ports of a given device
