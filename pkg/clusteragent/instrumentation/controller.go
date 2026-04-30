@@ -32,18 +32,18 @@ type Controller struct {
 	statusClient dynamic.Interface
 	synced       cache.InformerSynced
 	workqueue    workqueue.TypedRateLimitingInterface[queueItem]
-	registry     *Registry
+	handlers     []Handler
 	isLeader     func() bool
 }
 
 // NewController creates a DatadogInstrumentation controller backed by a dynamic informer.
-func NewController(statusClient dynamic.Interface, informer dynamicinformer.DynamicSharedInformerFactory, registry *Registry, isLeader func() bool) (*Controller, error) {
+func NewController(statusClient dynamic.Interface, informer dynamicinformer.DynamicSharedInformerFactory, handlers []Handler, isLeader func() bool) (*Controller, error) {
 	datadogInstrumentationInformer := informer.ForResource(gvrDatadogInstrumentation)
 	c := &Controller{
 		statusClient: statusClient,
 		synced:       datadogInstrumentationInformer.Informer().HasSynced,
 		workqueue:    workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedItemBasedRateLimiter[queueItem](), workqueue.TypedRateLimitingQueueConfig[queueItem]{Name: "datadoginstrumentations"}),
-		registry:     registry,
+		handlers:     handlers,
 		isLeader:     isLeader,
 	}
 
@@ -113,7 +113,7 @@ func (c *Controller) reconcile(ctx context.Context, snapshot eventSnapshot) erro
 		return nil
 	}
 
-	for _, handler := range c.registry.Handlers() {
+	for _, handler := range c.handlers {
 		eventType, ok := classifySectionEvent(handler, snapshot.old, snapshot.new)
 		if !ok {
 			continue

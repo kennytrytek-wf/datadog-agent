@@ -29,13 +29,6 @@ const (
 	EventDelete EventType = "delete"
 )
 
-const (
-	// ReasonTargetRefConflict is used when multiple CRs in a namespace target the same workload.
-	ReasonTargetRefConflict = "TargetRefConflict"
-	// ReasonUnsupportedTarget is used when a handler does not support the CR target kind.
-	ReasonUnsupportedTarget = "UnsupportedTarget"
-)
-
 // Handler owns one product section of a DatadogInstrumentation custom resource.
 type Handler interface {
 	Name() string

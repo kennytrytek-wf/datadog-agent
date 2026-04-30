@@ -196,11 +196,18 @@ func startAutoscalersController(ctx *ControllerContext, c chan error) {
 
 // startDatadogInstrumentationController starts the shared DatadogInstrumentation reconciliation controller.
 func startDatadogInstrumentationController(ctx *ControllerContext, c chan error) {
-	registry := instrumentation.NewRegistry(&instrumentationhandlers.AutodiscoveryHandler{})
+	handlers, err := instrumentationhandlers.DefaultHandlers(instrumentationhandlers.Deps{
+		IsLeader: ctx.IsLeaderFunc,
+	})
+	if err != nil {
+		c <- err
+		return
+	}
+
 	controller, err := instrumentation.NewController(
 		ctx.DynamicUpdateClient,
 		ctx.DynamicInformerFactory,
-		registry,
+		handlers,
 		ctx.IsLeaderFunc,
 	)
 	if err != nil {

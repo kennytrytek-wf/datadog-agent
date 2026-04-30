@@ -2,7 +2,10 @@ load("@rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "handlers",
-    srcs = ["autodiscovery.go"],
+    srcs = [
+        "autodiscovery.go",
+        "registry.go",
+    ],
     importpath = "github.com/DataDog/datadog-agent/pkg/clusteragent/instrumentation/handlers",
     visibility = ["//visibility:public"],
     deps = [

@@ -21,6 +21,11 @@ const checksReadyConditionType = "ChecksReady"
 // AutodiscoveryHandler is the shell for DatadogInstrumentation check configuration handling.
 type AutodiscoveryHandler struct{}
 
+// NewAutodiscoveryHandler returns the Autodiscovery DatadogInstrumentation handler.
+func NewAutodiscoveryHandler(_ Deps) *AutodiscoveryHandler {
+	return &AutodiscoveryHandler{}
+}
+
 // Name returns the unique handler name.
 func (h *AutodiscoveryHandler) Name() string {
 	return "autodiscovery"
