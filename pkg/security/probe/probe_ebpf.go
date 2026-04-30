@@ -1153,9 +1153,14 @@ func (p *EBPFProbe) setProcessContext(eventType model.EventType, event *model.Ev
 				p.Resolvers.ProcessResolver.CountBrokenLineage()
 			}
 
-			// check the cgroup transition
+			// Detect a cgroup migration. cache_syscall keeps proc_cache.cgroup
+			// in sync via bpf_get_current_cgroup_id at every syscall entry, so
+			// a mismatch between the entry's cached cgroup and the per-event
+			// cgroupContext (filled from proc_cache by the kernel side) means
+			// the process moved to a different cgroup since the entry was
+			// cached. Refresh the cached cgroup and container context.
 			if entry.CGroup.CGroupPathKey.Inode != cgroupContext.CGroupPathKey.Inode {
-				if cacheEntry := p.Resolvers.CGroupResolver.AddPID(entry.Pid, entry.PPid, cgroupContext); cacheEntry == nil {
+				if cacheEntry := p.Resolvers.CGroupResolver.AddPID(entry.Pid, cgroupContext); cacheEntry == nil {
 					seclog.Debugf("Failed to resolve cgroup for pid %d: %+v", entry.Pid, cgroupContext.CGroupPathKey)
 				} else {
 					p.Resolvers.ProcessResolver.UpdateProcessContexts(entry, cacheEntry.GetCGroupContext(), cacheEntry.GetContainerContext())

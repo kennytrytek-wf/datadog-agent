@@ -112,17 +112,11 @@ static struct policy_t __attribute__((always_inline)) fetch_policy(u64 event_typ
     return empty_policy;
 }
 
-// cache_syscall checks the event policy in order to see if the syscall struct can be cached
-static void __attribute__((always_inline)) cache_syscall(struct syscall_cache_t *syscall) {
-    u64 pid_tgid = bpf_get_current_pid_tgid();
-    u32 pid = pid_tgid >> 32;
-
-    // handle kill action
-    send_signal(pid);
-
-    bpf_map_update_elem(&syscalls, &pid_tgid, syscall, BPF_ANY);
-
-    // update the cgroup id
+// update_proc_cache_cgroup_id refreshes the cached cgroup id of the given pid
+// using bpf_get_current_cgroup_id. A no-op on kernels that do not expose the
+// helper (gated by the `has_current_cgroup_id_helper` constant). Used to keep
+// the proc_cache in sync when a process migrates between cgroups.
+static void __attribute__((always_inline)) update_proc_cache_cgroup_id(u32 pid) {
     u64 has_current_cgroup_id_helper = 0;
     LOAD_CONSTANT("has_current_cgroup_id_helper", has_current_cgroup_id_helper);
     if (has_current_cgroup_id_helper) {
@@ -133,6 +127,22 @@ static void __attribute__((always_inline)) cache_syscall(struct syscall_cache_t 
             entry->cgroup.cgroup_file.ino = cgroup_id;
         }
     }
+}
+
+// cache_syscall checks the event policy in order to see if the syscall struct can be cached
+static void __attribute__((always_inline)) cache_syscall(struct syscall_cache_t *syscall) {
+    u64 pid_tgid = bpf_get_current_pid_tgid();
+    u32 pid = pid_tgid >> 32;
+
+    // handle kill action
+    send_signal(pid);
+
+    bpf_map_update_elem(&syscalls, &pid_tgid, syscall, BPF_ANY);
+
+    // refresh proc_cache.cgroup at every syscall entry, before any approver or
+    // discarder runs, so the cached cgroup id stays current even when the
+    // syscall is filtered out and never reaches userspace
+    update_proc_cache_cgroup_id(pid);
 
     monitor_syscalls(syscall->type, 1);
 }

@@ -101,7 +101,11 @@ int __attribute__((always_inline)) handle_open(ctx_t *ctx, struct path *path) {
     // do not pop, we want to keep track of the mount ref counter later in the stack
     approve_syscall(syscall, open_approvers);
 
-    if (is_cgroup2fs(syscall->open.dentry) && syscall->state != ACCEPTED) {
+    // skip when the open is issued by system-probe itself (typically the
+    // cgroup resolver fallback walking cgroup2fs); promoting those to
+    // INTERNAL would emit dir-open events that feed back into the cgroup
+    // resolver and cause noise / recursion.
+    if (!is_runtime_request() && is_cgroup2fs(syscall->open.dentry) && syscall->state != ACCEPTED) {
         // do not discard INTERNAL events as we need to resolve the mode later in the call path
         syscall->state = INTERNAL;
     }
