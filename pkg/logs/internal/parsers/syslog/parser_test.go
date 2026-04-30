@@ -472,6 +472,97 @@ func TestSyslogParser_NoTimestamp_LeadingSpace(t *testing.T) {
 	assert.Equal(t, message.StatusInfo, result.Status) // 134 % 8 = 6 = info
 }
 
+// ---------------------------------------------------------------------------
+// Hostname enrichment from source_host tag (RFC 3164 §4.3.2 + receiver context)
+// ---------------------------------------------------------------------------
+
+func TestSyslogParser_NoTimestamp_HostnameFromSourceHost(t *testing.T) {
+	parser := NewParser(true)
+
+	// Simulates Python SysLogHandler over TCP: <PRI>message, no timestamp/hostname.
+	// The StreamTailer adds "source_host:<ip>" to ParsingExtra.Tags.
+	input := newTestMessage([]byte("<132>Python SysLogHandler TCP test"))
+	input.ParsingExtra.Tags = []string{"source_host:10.0.0.42"}
+
+	result, err := parser.Parse(input)
+	require.NoError(t, err)
+	assert.Equal(t, message.StateStructured, result.State)
+	assert.Equal(t, "Python SysLogHandler TCP test", string(result.GetContent()))
+
+	rendered, err := result.Render()
+	require.NoError(t, err)
+
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal(rendered, &data))
+
+	syslog, ok := data["syslog"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "10.0.0.42", syslog["hostname"],
+		"hostname should be enriched from source_host tag")
+}
+
+func TestSyslogParser_NoTimestamp_NoSourceHost_StaysNilvalue(t *testing.T) {
+	parser := NewParser(true)
+
+	// No source_host tag present — hostname stays nilvalue.
+	input := newTestMessage([]byte("<132>Python SysLogHandler TCP test"))
+
+	result, err := parser.Parse(input)
+	require.NoError(t, err)
+
+	rendered, err := result.Render()
+	require.NoError(t, err)
+
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal(rendered, &data))
+
+	syslog, ok := data["syslog"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "-", syslog["hostname"],
+		"without source_host tag, hostname should remain nilvalue")
+}
+
+func TestSyslogParser_WithTimestamp_IgnoresSourceHost(t *testing.T) {
+	parser := NewParser(true)
+
+	// Full BSD message with hostname already present — source_host should NOT override.
+	input := newTestMessage([]byte("<34>Oct 11 22:14:15 mymachine su: test"))
+	input.ParsingExtra.Tags = []string{"source_host:10.0.0.42"}
+
+	result, err := parser.Parse(input)
+	require.NoError(t, err)
+
+	rendered, err := result.Render()
+	require.NoError(t, err)
+
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal(rendered, &data))
+
+	syslog, ok := data["syslog"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "mymachine", syslog["hostname"],
+		"when hostname is present in the message, source_host should not override it")
+}
+
+func TestExtractSourceHost(t *testing.T) {
+	tests := []struct {
+		name string
+		tags []string
+		want string
+	}{
+		{"present", []string{"env:prod", "source_host:10.0.0.1"}, "10.0.0.1"},
+		{"missing", []string{"env:prod", "team:logs"}, ""},
+		{"empty tags", nil, ""},
+		{"ipv6", []string{"source_host:::1"}, "::1"},
+		{"first match", []string{"source_host:10.0.0.1", "source_host:10.0.0.2"}, "10.0.0.1"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, extractSourceHost(tc.tags))
+		})
+	}
+}
+
 func TestSyslogParser_MalformedSyslogDoesNotExtractSIEM(t *testing.T) {
 	parser := NewParser(true)
 	// Malformed PRI (non-digit) followed by valid CEF — syslog parse fails,

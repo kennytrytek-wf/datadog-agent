@@ -470,7 +470,7 @@ func TestSyslogMalformedFrameEmission(t *testing.T) {
 		assert.Equal(t, "0", discarded[0])
 	})
 
-	t.Run("junk before octet-counted frame resyncs at digit", func(t *testing.T) {
+	t.Run("junk before octet-counted frame resyncs at digit+SP+PRI", func(t *testing.T) {
 		tailerInfo := status.NewInfoRegistry()
 		var contents []string
 		outputFn := func(msg *message.Message, _ int) {
@@ -627,6 +627,82 @@ func TestSyslogSplitTruncationFlags(t *testing.T) {
 
 		require.Len(t, truncated, 1)
 		assert.False(t, truncated[0])
+	})
+}
+
+func TestSyslogMalformedSyncHeuristic(t *testing.T) {
+	t.Run("JSON on syslog port produces single frame not 13", func(t *testing.T) {
+		// Previously, bare digits in JSON timestamps caused isSyslogFrameStart
+		// to fire on every digit, fragmenting one JSON line into 13+ entries.
+		input := []byte(`{"level":"warn","msg":"test","ts":"2026-04-20T12:00:00Z"}`)
+
+		tailerInfo := status.NewInfoRegistry()
+		var contents []string
+		outputFn := func(msg *message.Message, _ int) {
+			if len(msg.GetContent()) > 0 {
+				contents = append(contents, string(msg.GetContent()))
+			}
+		}
+		fr := NewSyslogFramer(outputFn, 4096, tailerInfo)
+		fr.Process(message.NewMessage(input, nil, "", 0))
+		fr.Flush()
+
+		// Should produce at most 2 frames: the JSON body as malformed + possibly
+		// a small tail. Previously this was 13+ fragments.
+		require.LessOrEqual(t, len(contents), 2,
+			"JSON line should not fragment into many entries, got %d: %v", len(contents), contents)
+
+		combined := strings.Join(contents, "")
+		assert.Equal(t, string(input), combined, "all bytes must be preserved")
+	})
+
+	t.Run("garbage before two octet-counted frames recovers both", func(t *testing.T) {
+		msg1 := "<134>1 2026-04-30T12:00:00Z host app 1234 - - message one"
+		msg2 := "<134>1 2026-04-30T12:00:00Z host app 1234 - - message two"
+		oc1 := fmt.Sprintf("%d %s", len(msg1), msg1)
+		oc2 := fmt.Sprintf("%d %s", len(msg2), msg2)
+		input := []byte("GARBAGE" + oc1 + oc2)
+
+		got, _ := processSyslog(t, 4096, [][]byte{input})
+		require.Len(t, got, 3, "expected: malformed + 2 octet-counted frames")
+		assert.Equal(t, "GARBAGE", got[0])
+		assert.Equal(t, msg1, got[1])
+		assert.Equal(t, msg2, got[2])
+	})
+
+	t.Run("garbage before non-transparent frames recovers at PRI", func(t *testing.T) {
+		msg1 := "<134>1 host app - - - msg1"
+		msg2 := "<134>1 host app - - - msg2"
+		input := []byte("GARBAGE" + msg1 + "\n" + msg2 + "\n")
+
+		got, _ := processSyslog(t, 4096, [][]byte{input})
+		require.Len(t, got, 3)
+		assert.Equal(t, "GARBAGE", got[0])
+		assert.Equal(t, msg1, got[1])
+		assert.Equal(t, msg2, got[2])
+	})
+
+	t.Run("digits in garbage do not trigger false sync", func(t *testing.T) {
+		// "error code 42" contains digits but no "digit SP <digit" pattern.
+		msg := "<34>1 host app - - - real"
+		input := []byte("error code 42" + msg + "\n")
+
+		got, _ := processSyslog(t, 4096, [][]byte{input})
+		require.Len(t, got, 2)
+		assert.Equal(t, "error code 42", got[0])
+		assert.Equal(t, msg, got[1])
+	})
+
+	t.Run("ISO timestamp in garbage does not fragment", func(t *testing.T) {
+		// The timestamp "2026-04-30T14:05:42Z" must not cause fragmentation.
+		garbage := "log 2026-04-30T14:05:42Z some event"
+		msg := "<34>1 host app - - - real"
+		input := []byte(garbage + msg + "\n")
+
+		got, _ := processSyslog(t, 4096, [][]byte{input})
+		require.Len(t, got, 2)
+		assert.Equal(t, garbage, got[0])
+		assert.Equal(t, msg, got[1])
 	})
 }
 

@@ -43,10 +43,11 @@ type syslogFrameMatcher struct {
 // were present on the last call (used to avoid rescanning).
 //
 // When the leading byte is not a valid syslog frame start ('<' or digit),
-// the matcher scans forward for the next probable PRI header — the two-byte
-// sequence <[0-9]. Everything before that sync point is emitted as a single
-// malformed frame so the downstream parser can log it coherently rather than
-// producing one empty message per byte.
+// the matcher scans forward for the next probable frame start — either a
+// PRI header (<[0-9]) or an octet-counting prefix (digit+ SP <digit).
+// Everything before that sync point is emitted as a single malformed frame
+// so the downstream parser can log it coherently rather than producing one
+// empty message per byte.
 func (m *syslogFrameMatcher) FindFrame(buf []byte, seen int) ([]byte, int, bool) {
 	if len(buf) == 0 {
 		return nil, 0, false
@@ -85,9 +86,10 @@ func (m *syslogFrameMatcher) FindFrame(buf []byte, seen int) ([]byte, int, bool)
 }
 
 // findMalformed handles bytes that don't start a valid syslog frame. It scans
-// forward for the next probable PRI header (<[0-9]) or newline delimiter and
-// emits everything before it as a single malformed frame. If no sync point is
-// found, returns nil to wait for more data.
+// forward for the next probable frame start (PRI header or octet-counting
+// prefix), newline, or NUL delimiter and emits everything before it as a
+// single malformed frame. If no sync point is found, returns nil to wait
+// for more data.
 //
 // When the malformed content exceeds contentLenLimit, only the first
 // contentLenLimit bytes are emitted and the remainder stays in the buffer
@@ -112,16 +114,31 @@ func (m *syslogFrameMatcher) findMalformed(buf []byte) ([]byte, int, bool) {
 }
 
 // isSyslogFrameStart returns true if buf[i] looks like the start of a valid
-// syslog frame: either a digit (octet counting) or '<' followed by a digit
-// (PRI header). The two-byte check for '<' avoids false positives on stray
-// angle brackets in text.
+// syslog frame. Two patterns are recognized:
+//
+//   - Non-transparent PRI header: <[0-9] (e.g. "<134>...")
+//   - Octet-counting prefix: [1-9][0-9]* SP <[0-9] (e.g. "62 <134>...")
+//
+// The octet-counting check requires the full "digits SP <digit" signature
+// to avoid false positives on bare digits in non-syslog content (e.g.,
+// timestamps like "2026-04-20T12:00:00Z" or JSON values). Previously, any
+// digit 1-9 was treated as a sync point, which caused a single JSON line
+// to fragment into 13+ entries.
 func isSyslogFrameStart(buf []byte, i int) bool {
 	b := buf[i]
-	if b >= '1' && b <= '9' {
-		return true
-	}
 	if b == '<' && i+1 < len(buf) && buf[i+1] >= '0' && buf[i+1] <= '9' {
 		return true
+	}
+	if b >= '1' && b <= '9' {
+		j := i
+		for j < len(buf) && buf[j] >= '0' && buf[j] <= '9' {
+			j++
+		}
+		if j < len(buf) && buf[j] == ' ' &&
+			j+1 < len(buf) && buf[j+1] == '<' &&
+			j+2 < len(buf) && buf[j+2] >= '0' && buf[j+2] <= '9' {
+			return true
+		}
 	}
 	return false
 }

@@ -6,6 +6,8 @@
 package syslog
 
 import (
+	"strings"
+
 	"github.com/DataDog/datadog-agent/pkg/logs/internal/parsers"
 	"github.com/DataDog/datadog-agent/pkg/logs/message"
 )
@@ -54,6 +56,17 @@ func (p *parser) Parse(msg *message.Message) (*message.Message, error) {
 		return msg, err
 	}
 
+	// RFC 3164 §4.3.2: when the parser returns nilvalue for hostname
+	// (e.g., Python's SysLogHandler sends <PRI>msg with no header fields),
+	// enrich it from the sender's IP carried in the source_host tag. This
+	// keeps the low-level parser pure (bytes-only) while the adapter
+	// supplies receiver-local context per the RFC's SHOULD recommendation.
+	if parsed.Hostname == nilvalue {
+		if ip := extractSourceHost(msg.ParsingExtra.Tags); ip != "" {
+			parsed.Hostname = ip
+		}
+	}
+
 	sc := NewSyslogStructuredContent(parsed, p.siemParsing)
 
 	structured := message.NewStructuredMessage(
@@ -78,4 +91,16 @@ func (p *parser) Parse(msg *message.Message) (*message.Message, error) {
 // complete (one message per line), so partial line support is not needed.
 func (p *parser) SupportsPartialLine() bool {
 	return false
+}
+
+const sourceHostPrefix = "source_host:"
+
+// extractSourceHost returns the IP from a "source_host:<ip>" tag if present.
+func extractSourceHost(tags []string) string {
+	for _, tag := range tags {
+		if strings.HasPrefix(tag, sourceHostPrefix) {
+			return tag[len(sourceHostPrefix):]
+		}
+	}
+	return ""
 }
