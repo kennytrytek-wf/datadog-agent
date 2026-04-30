@@ -267,33 +267,32 @@ func TestDisabledCollectors(t *testing.T) {
 		{
 			name:                   "no collectors disabled",
 			disabledCollectors:     []string{},
-			expectedCollectorCount: 7, // stateless, sampling, fields, gpm, device_events + 2 nvlink dynamic collectors
+			expectedCollectorCount: 9, // stateless, sampling, fields, gpm, device_events + 4 nvlink dynamic collectors
 			expectedCollectorNames: []CollectorName{stateless, sampling, field, gpm, deviceEvents},
-			expectedCountsByName:   map[CollectorName]int{nvlink: 2},
+			expectedCountsByName:   map[CollectorName]int{nvlink: 4},
 		},
 		{
 			name:                   "disable gpm collector",
 			disabledCollectors:     []string{"gpm"},
-			expectedCollectorCount: 6,
+			expectedCollectorCount: 8,
 			expectedCollectorNames: []CollectorName{stateless, sampling, field, deviceEvents},
-			expectedCountsByName:   map[CollectorName]int{nvlink: 2},
+			expectedCountsByName:   map[CollectorName]int{nvlink: 4},
 			unexpectedNames:        []CollectorName{gpm},
 		},
 		{
 			name:                   "disable multiple collectors",
 			disabledCollectors:     []string{"gpm", "fields"},
-			expectedCollectorCount: 5,
+			expectedCollectorCount: 7,
 			expectedCollectorNames: []CollectorName{stateless, sampling, deviceEvents},
-			expectedCountsByName:   map[CollectorName]int{nvlink: 2},
+			expectedCountsByName:   map[CollectorName]int{nvlink: 4},
 			unexpectedNames:        []CollectorName{gpm, field},
 		},
 		{
 			name:                   "disable dynamic nvlink collector",
 			disabledCollectors:     []string{"nvlink.plr"},
-			expectedCollectorCount: 5, // disable via dynamic sub-builder name
+			expectedCollectorCount: 7, // disable via dynamic sub-builder name
 			expectedCollectorNames: []CollectorName{stateless, sampling, field, gpm, deviceEvents},
-			expectedCountsByName:   map[CollectorName]int{nvlink: 0},
-			unexpectedNames:        []CollectorName{nvlink},
+			expectedCountsByName:   map[CollectorName]int{nvlink: 2, nvlinkPLR: 0, nvlinkFEC: 2},
 		},
 		{
 			name:                   "disable nvlink dynamic group",
@@ -305,7 +304,7 @@ func TestDisabledCollectors(t *testing.T) {
 		},
 		{
 			name:                   "disable all collectors",
-			disabledCollectors:     []string{"stateless", "sampling", "fields", "gpm", "device_events", "nvlink", "nvlink.plr"},
+			disabledCollectors:     []string{"stateless", "sampling", "fields", "gpm", "device_events", "nvlink"},
 			expectedCollectorCount: 0, // also disable dynamic nvlink builders
 			expectedCollectorNames: []CollectorName{},
 			expectedCountsByName:   map[CollectorName]int{nvlink: 0},
@@ -314,9 +313,9 @@ func TestDisabledCollectors(t *testing.T) {
 		{
 			name:                   "disable non-existent collector",
 			disabledCollectors:     []string{"non_existent"},
-			expectedCollectorCount: 7,
+			expectedCollectorCount: 9,
 			expectedCollectorNames: []CollectorName{stateless, sampling, field, gpm, deviceEvents},
-			expectedCountsByName:   map[CollectorName]int{nvlink: 2},
+			expectedCountsByName:   map[CollectorName]int{nvlink: 4},
 		},
 	}
 
@@ -360,9 +359,13 @@ func TestDisabledCollectors(t *testing.T) {
 				collectorNames[collector.Name()] = true
 				collectorName := collector.Name()
 				collectorCounts[collectorName]++
-				// NVLink PLR collectors are now port-qualified (e.g. nvlink.plr.1),
-				// so aggregate them under "nvlink" for group-level test assertions.
+				// NVLink PLR collectors are port-qualified (e.g. nvlink.plr.1);
+				// aggregate NVLink sub-collectors for group-level assertions.
 				if strings.HasPrefix(string(collectorName), string(nvlinkPLR)+".") {
+					collectorCounts[nvlink]++
+					collectorCounts[nvlinkPLR]++
+				}
+				if collectorName == nvlinkFEC {
 					collectorCounts[nvlink]++
 				}
 			}

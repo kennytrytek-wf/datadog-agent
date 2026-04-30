@@ -22,9 +22,16 @@ func TestGetNvlinkBuildersAndCollectorCollect(t *testing.T) {
 	mockDevice := setupMockDeviceWithLibOpts(t, func(device *mock.Device) *mock.Device {
 		testutil.WithMockAllDeviceFunctions()(device)
 		device.GetFieldValuesFunc = func(values []nvml.FieldValue) nvml.Return {
-			require.Len(t, values, 1)
-			values[0].ValueType = uint32(nvml.VALUE_TYPE_UNSIGNED_INT)
-			values[0].Value = [8]byte{2, 0, 0, 0, 0, 0, 0, 0}
+			if len(values) == 1 {
+				values[0].ValueType = uint32(nvml.VALUE_TYPE_UNSIGNED_INT)
+				values[0].Value = [8]byte{2, 0, 0, 0, 0, 0, 0, 0}
+				return nvml.SUCCESS
+			}
+			for i := range values {
+				values[i].ValueType = uint32(nvml.VALUE_TYPE_UNSIGNED_LONG_LONG)
+				binary.LittleEndian.PutUint64(values[i].Value[:], uint64(i+1))
+				values[i].NvmlReturn = uint32(nvml.SUCCESS)
+			}
 			return nvml.SUCCESS
 		}
 		device.ReadWritePRM_v1Func = func(buffer *nvml.PRMTLV_v1) nvml.Return {
@@ -38,7 +45,7 @@ func TestGetNvlinkBuildersAndCollectorCollect(t *testing.T) {
 
 	builders, err := getNvlinkBuilders(mockDevice)
 	require.NoError(t, err)
-	require.Len(t, builders, 2)
+	require.Len(t, builders, 4)
 
 	var metrics []Metric
 	for _, builder := range builders {
@@ -50,7 +57,7 @@ func TestGetNvlinkBuildersAndCollectorCollect(t *testing.T) {
 		metrics = append(metrics, collected...)
 	}
 
-	require.Len(t, metrics, len(plrCounterFields)*2)
+	require.Len(t, metrics, len(plrCounterFields)*2+len(nvlinkFECHistoryFieldIDs)*2*2)
 
 	port1Count := 0
 	port2Count := 0
@@ -64,17 +71,27 @@ func TestGetNvlinkBuildersAndCollectorCollect(t *testing.T) {
 			t.Fatalf("missing nvlink_port tag on metric %+v", metric)
 		}
 	}
-	require.Equal(t, len(plrCounterFields), port1Count)
-	require.Equal(t, len(plrCounterFields), port2Count)
+	require.Equal(t, len(plrCounterFields)+len(nvlinkFECHistoryFieldIDs)*2, port1Count)
+	require.Equal(t, len(plrCounterFields)+len(nvlinkFECHistoryFieldIDs)*2, port2Count)
 }
 
 func TestGetNvlinkBuildersPartialFailure(t *testing.T) {
 	mockDevice := setupMockDeviceWithLibOpts(t, func(device *mock.Device) *mock.Device {
 		testutil.WithMockAllDeviceFunctions()(device)
 		device.GetFieldValuesFunc = func(values []nvml.FieldValue) nvml.Return {
-			require.Len(t, values, 1)
-			values[0].ValueType = uint32(nvml.VALUE_TYPE_UNSIGNED_INT)
-			values[0].Value = [8]byte{2, 0, 0, 0, 0, 0, 0, 0}
+			if len(values) == 1 {
+				values[0].ValueType = uint32(nvml.VALUE_TYPE_UNSIGNED_INT)
+				values[0].Value = [8]byte{2, 0, 0, 0, 0, 0, 0, 0}
+				return nvml.SUCCESS
+			}
+			if values[0].ScopeId == 1 {
+				return nvml.ERROR_NOT_SUPPORTED
+			}
+			for i := range values {
+				values[i].ValueType = uint32(nvml.VALUE_TYPE_UNSIGNED_LONG_LONG)
+				binary.LittleEndian.PutUint64(values[i].Value[:], uint64(i+1))
+				values[i].NvmlReturn = uint32(nvml.SUCCESS)
+			}
 			return nvml.SUCCESS
 		}
 		device.ReadWritePRM_v1Func = func(buffer *nvml.PRMTLV_v1) nvml.Return {
@@ -91,7 +108,7 @@ func TestGetNvlinkBuildersPartialFailure(t *testing.T) {
 
 	builders, err := getNvlinkBuilders(mockDevice)
 	require.NoError(t, err)
-	require.Len(t, builders, 2)
+	require.Len(t, builders, 4)
 
 	var metrics []Metric
 	for _, builder := range builders {
@@ -106,7 +123,7 @@ func TestGetNvlinkBuildersPartialFailure(t *testing.T) {
 		metrics = append(metrics, collected...)
 	}
 
-	require.Len(t, metrics, len(plrCounterFields))
+	require.Len(t, metrics, len(plrCounterFields)+len(nvlinkFECHistoryFieldIDs)*2)
 	for _, metric := range metrics {
 		require.Contains(t, metric.Tags, "nvlink_port:1")
 	}

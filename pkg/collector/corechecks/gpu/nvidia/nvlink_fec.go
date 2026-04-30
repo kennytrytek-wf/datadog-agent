@@ -94,6 +94,7 @@ func (c *nvlinkFECCollector) Collect() ([]Metric, error) {
 			Type:     metrics.HistogramType,
 			Value:    float64(count),
 			Priority: Medium,
+			Tags:     []string{portTag(c.port)},
 			HistogramBucket: &Bucket{
 				Bounds:          [2]float64{float64(bucket), float64(bucket + 1)},
 				Monotonic:       true,
