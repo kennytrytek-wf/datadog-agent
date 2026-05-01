@@ -276,8 +276,7 @@ func (r *Resolver) Start(ctx context.Context) error {
 			case <-enrichTicker.C:
 				if r.wmeta != nil {
 					seclog.Debugf("Enriching SBOM with runtime usage")
-					_, err := r.enrichSBOMsWithUsage()
-					if err != nil {
+					if err := r.enrichSBOMsWithUsage(); err != nil {
 						seclog.Errorf("Couldn't enrich SBOMs with usage: %v", err)
 					}
 				}
@@ -497,12 +496,11 @@ func (r *Resolver) removeSBOMData(key workloadKey) {
 	r.dataCacheLock.Unlock()
 }
 
-func (r *Resolver) enrichSBOMsWithUsage() (bool, error) {
+func (r *Resolver) enrichSBOMsWithUsage() error {
 	r.sbomsLock.RLock()
 	defer r.sbomsLock.RUnlock()
 
 	images := r.wmeta.ListImages()
-	enriched := false
 
 	for _, image := range images {
 		uncompressedSBOM, err := sbomutil.UncompressSBOM(image.SBOM)
@@ -518,13 +516,15 @@ func (r *Resolver) enrichSBOMsWithUsage() (bool, error) {
 		for _, sbom := range r.sboms.Values() {
 			sbom.Lock()
 			if sbom.data != nil && sbom.workloadKey == workloadKey(image.Name) {
-				enriched = enriched || r.enrichSBOMWithUsage(uncompressedSBOM, sbom)
+				if r.enrichSBOMWithUsage(uncompressedSBOM, sbom) {
+					r.triggerForwarding(sbom)
+				}
 			}
 			sbom.Unlock()
 		}
 	}
 
-	return enriched, nil
+	return nil
 }
 
 func (r *Resolver) enrichSBOMWithUsage(wsbom *workloadmeta.SBOM, sbom *SBOM) bool {
