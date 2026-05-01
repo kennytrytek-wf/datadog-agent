@@ -516,10 +516,9 @@ func (r *Resolver) enrichSBOMsWithUsage() error {
 		for _, sbom := range r.sboms.Values() {
 			sbom.Lock()
 			if sbom.data != nil && sbom.workloadKey == workloadKey(image.Name) {
-				if r.enrichSBOMWithUsage(uncompressedSBOM, sbom) {
-					r.triggerForwarding(sbom)
-				}
+				_ = r.enrichSBOMWithUsage(uncompressedSBOM, sbom)
 			}
+			r.triggerForwarding(sbom)
 			sbom.Unlock()
 		}
 	}
