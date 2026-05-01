@@ -128,7 +128,7 @@ All values must be in **events/sec** (guaranteed by `.as_rate()` on metric queri
 | SMP — no_fs_load (open) | from Step 3 | Background open noise with custom policy, no generator |
 | SMP — mean_fs_load (open) | from Step 3 | Open rate with custom policy and generator running |
 | Generator contribution | computed | mean_fs_load - no_fs_load |
-| Org2 per-host avg (open, weekly) | from Step 4 | production `event_type:open` `.as_rate()` weekly mean |
+| Internal production data per-host avg (open, weekly) | from Step 4 | production `event_type:open` `.as_rate()` weekly mean |
 
 **Supplementary context** (not used for tuning decisions):
 
@@ -136,12 +136,12 @@ All values must be in **events/sec** (guaranteed by `.as_rate()` on metric queri
 |--------|---------------------|-------------|
 | SMP — no_fs_load (all file activity) | from Step 3 | no-load `category:file_activity` — background noise floor |
 | SMP — mean_fs_load (all file activity) | from Step 3 | loaded `category:file_activity` |
-| Org2 per-host avg (all file activity, weekly) | from Step 4 | production `category:file_activity` weekly mean |
+| Internal production data per-host avg (all file activity, weekly) | from Step 4 | production `category:file_activity` weekly mean |
 
 Analysis:
 - **No-load baseline check**: The `no_fs_load` open rate captures background noise from always-on VFS hooks while the custom policy is in effect. Record this value as the noise floor.
 - **Generator contribution check**: `generator_contribution = mean_fs_load_open - no_fs_load_open` reflects the generator's observable effect on CWS. Note that this need not equal `open_per_second` — one lading syscall can produce multiple CWS events (and vice versa).
-- **Production validity check**: Compare the SMP `mean_fs_load` open rate against the org2 per-host weekly open average. If they diverge, flag the gap.
+- **Production validity check**: Compare the SMP `mean_fs_load` open rate against the internal production data per-host weekly open average. If they diverge, flag the gap.
 - Note the `category:file_activity` totals for reference
 
 ## Step 6: Output report
@@ -152,7 +152,7 @@ Print a markdown report answering "does the lading config reflect the production
 2. **SMP No-Load Baseline (no_fs_load, latest job `<NOLOAD_UUID>`)** — open rate and file activity with CWS + custom policy but no generator, showing the job_id, capture window (first → last non-zero epoch-ms with ISO derived via `date -u -r`), interval, data points count, and the mean expressed as `sum=<S> / n=<N> = <mean>` so the reader can reproduce the arithmetic without trusting the model
 3. **SMP Loaded (mean_fs_load, latest job `<LOADED_UUID>`)** — open rate and file activity with CWS + custom policy + generator, showing the job_id, capture window (epoch-ms + `date -u -r` derived ISO), interval, data points count, and the mean expressed as `sum=<S> / n=<N> = <mean>`
 4. **Generator Contribution** — delta between mean_fs_load and no_fs_load for open events (between the two latest jobs)
-5. **Org2 per-host avg (open, weekly)** — production open rate weekly mean
+5. **Internal production data per-host avg (open, weekly)** — production open rate weekly mean
 
 Followed by a supplementary note showing `category:file_activity` totals from both SMP experiments and production for reference.
 

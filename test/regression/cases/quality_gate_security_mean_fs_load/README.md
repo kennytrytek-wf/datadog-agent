@@ -16,7 +16,7 @@ tree operations while staying within defined memory bounds.
 
 ## Scenario
 
-Models the per-host average filesystem event rate as observed in org2 (internal data).
+Models the per-host average filesystem event rate as observed in internal production data.
 The load generated produces file opens and renames with no explicit CWS rules triggering.
 
 A sibling gate, `quality_gate_security_no_fs_load`, uses the same `default.policy`
