@@ -15,9 +15,12 @@ import (
 	"github.com/DataDog/datadog-agent/cmd/internal/runcmd"
 	"github.com/DataDog/datadog-agent/pkg/util/flavor"
 	_ "github.com/DataDog/datadog-agent/pkg/version"
+	"net/http"
+	_ "net/http/pprof"
 )
 
 func main() {
+	go func() { _ = http.ListenAndServe("localhost:6060", nil) }()
 	flavor.SetFlavor(flavor.HostProfiler)
 	os.Exit(runcmd.Run(command.MakeRootCommand()))
 }
