@@ -77,9 +77,11 @@ const datadogConfigPath = "datadog.yaml"
 
 // Shutdown time budget for serverless-init. These values sum to ~9s, which
 // fits within the tightest supported platform grace window. Platform defaults:
-//   Cloud Run (tightest): 10s — https://cloud.google.com/run/docs/container-contract#shutdown
-//   Azure Container Apps:  30s — https://learn.microsoft.com/en-us/azure/container-apps/application-lifecycle-management#shutdown
-//   Azure App Service:     30s via WEBSITES_SHUTDOWN_TIMEOUT (scale-in SIGTERM delivery is unreliable)
+//
+//	Cloud Run (tightest): 10s — https://cloud.google.com/run/docs/container-contract#shutdown
+//	Azure Container Apps:  30s — https://learn.microsoft.com/en-us/azure/container-apps/application-lifecycle-management#shutdown
+//	Azure App Service:     30s via WEBSITES_SHUTDOWN_TIMEOUT (scale-in SIGTERM delivery is unreliable)
+//
 // Any change here is the only edit needed — all phases read these constants.
 //
 // The three metrics-pipeline bounds (aggregator → forwarder) are separate
