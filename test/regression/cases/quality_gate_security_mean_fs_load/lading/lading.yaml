@@ -6,8 +6,8 @@ generator:
       # Must exceed open_per_second × run_duration_seconds so that lading never
       # exhausts the tree during a capture. Once all nodes exist on disk, opens
       # become O_RDONLY and are rejected by CWS kernel-side flag approvers.
-      max_nodes: 500000
-      open_per_second: 41
+      max_nodes: 2000000
+      open_per_second: 640
       rename_per_second: 1
 
 blackhole:
