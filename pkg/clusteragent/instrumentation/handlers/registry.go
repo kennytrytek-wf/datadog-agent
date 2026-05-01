@@ -5,6 +5,7 @@
 
 //go:build kubeapiserver
 
+// Package handlers provide product-specific handlers for the Datadog Instrumentation CRD controller.
 package handlers
 
 import "github.com/DataDog/datadog-agent/pkg/clusteragent/instrumentation"
