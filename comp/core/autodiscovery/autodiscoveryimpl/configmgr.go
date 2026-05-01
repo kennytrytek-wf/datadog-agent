@@ -56,6 +56,10 @@ type configManager interface {
 
 	// getActiveServices returns the currently active services
 	getActiveServices() map[string]listeners.Service
+
+	// getStaticConfigs returns all currently scheduled non-template configs
+	// grouped by integration name.
+	getStaticConfigs() map[string][]integration.Config
 }
 
 // serviceAndADIDs bundles a service and its associated AD identifiers.
@@ -108,6 +112,11 @@ type reconcilingConfigManager struct {
 	// methods correspond exactly to changes in this map.
 	scheduledConfigs map[string]integration.Config
 
+	// staticConfigsByName catalogs digests for all scheduled non-template
+	// configs, indexed by integration name. It is an index to
+	// scheduledConfigs, following the same pattern as templatesByADID.
+	staticConfigsByName multimap
+
 	secretResolver secrets.Component
 	healthPlatform healthplatformdef.Component
 }
@@ -117,14 +126,15 @@ var _ configManager = &reconcilingConfigManager{}
 // newReconcilingConfigManager creates a new, empty reconcilingConfigManager.
 func newReconcilingConfigManager(secretResolver secrets.Component, healthPlatform healthplatformdef.Component) configManager {
 	return &reconcilingConfigManager{
-		activeConfigs:      map[string]integration.Config{},
-		activeServices:     map[string]serviceAndADIDs{},
-		templatesByADID:    newMultimap(),
-		servicesByADID:     newMultimap(),
-		serviceResolutions: map[string]map[string]string{},
-		scheduledConfigs:   map[string]integration.Config{},
-		secretResolver:     secretResolver,
-		healthPlatform:     healthPlatform,
+		activeConfigs:       map[string]integration.Config{},
+		activeServices:      map[string]serviceAndADIDs{},
+		templatesByADID:     newMultimap(),
+		servicesByADID:      newMultimap(),
+		serviceResolutions:  map[string]map[string]string{},
+		scheduledConfigs:    map[string]integration.Config{},
+		staticConfigsByName: newMultimap(),
+		secretResolver:      secretResolver,
+		healthPlatform:      healthPlatform,
 	}
 }
 
@@ -241,6 +251,9 @@ func (cm *reconcilingConfigManager) processNewConfig(config integration.Config) 
 		}
 
 		changes.ScheduleConfig(decryptedConfig)
+
+		// Track this static config by integration name
+		cm.staticConfigsByName.insert(config.Name, digest)
 	}
 
 	//  4. update scheduledConfigs
@@ -292,6 +305,9 @@ func (cm *reconcilingConfigManager) processDelConfigs(configs []integration.Conf
 			}
 
 			changes.UnscheduleConfig(config)
+
+			// Remove this static config from tracking
+			cm.staticConfigsByName.remove(config.Name, digest)
 		}
 
 		//  4. update scheduledConfigs
@@ -324,6 +340,23 @@ func (cm *reconcilingConfigManager) getActiveServices() map[string]listeners.Ser
 	res := make(map[string]listeners.Service, len(cm.activeServices))
 	for k, v := range cm.activeServices {
 		res[k] = v.svc
+	}
+	return res
+}
+
+func (cm *reconcilingConfigManager) getStaticConfigs() map[string][]integration.Config {
+	cm.m.Lock()
+	defer cm.m.Unlock()
+
+	res := make(map[string][]integration.Config, len(cm.staticConfigsByName.data))
+	for name, digests := range cm.staticConfigsByName.data {
+		configs := make([]integration.Config, 0, len(digests))
+		for _, digest := range digests {
+			if cfg, ok := cm.scheduledConfigs[digest]; ok {
+				configs = append(configs, cfg)
+			}
+		}
+		res[name] = configs
 	}
 	return res
 }

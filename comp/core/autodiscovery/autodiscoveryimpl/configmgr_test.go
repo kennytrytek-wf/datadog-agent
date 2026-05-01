@@ -483,6 +483,39 @@ func (suite *ConfigManagerSuite) TestFuzz() {
 	})
 }
 
+// Static (non-template) configs are tracked by integration name while
+// template configs with the same name are excluded.
+func (suite *ConfigManagerSuite) TestStaticConfigsTracking() {
+	staticRedis := integration.Config{Name: "redis"}
+	templateRedis := integration.Config{Name: "redis", ADIdentifiers: []string{"docker://redis"}}
+	staticPostgres := integration.Config{Name: "postgres"}
+
+	suite.cm.processNewConfig(staticRedis)
+	suite.cm.processNewConfig(templateRedis)
+	suite.cm.processNewConfig(staticPostgres)
+
+	staticConfigs := suite.cm.getStaticConfigs()
+	assert.Len(suite.T(), staticConfigs, 2)
+	assert.Len(suite.T(), staticConfigs["redis"], 1, "only the static redis config should be tracked")
+	assert.Len(suite.T(), staticConfigs["postgres"], 1)
+
+	// Removing the template should not affect static tracking
+	suite.cm.processDelConfigs([]integration.Config{templateRedis})
+	staticConfigs = suite.cm.getStaticConfigs()
+	assert.Len(suite.T(), staticConfigs["redis"], 1)
+
+	// Removing the static redis config clears the entry
+	suite.cm.processDelConfigs([]integration.Config{staticRedis})
+	staticConfigs = suite.cm.getStaticConfigs()
+	assert.NotContains(suite.T(), staticConfigs, "redis")
+	assert.Len(suite.T(), staticConfigs["postgres"], 1)
+
+	// Removing postgres leaves an empty map
+	suite.cm.processDelConfigs([]integration.Config{staticPostgres})
+	staticConfigs = suite.cm.getStaticConfigs()
+	assert.Empty(suite.T(), staticConfigs)
+}
+
 type ReconcilingConfigManagerSuite struct {
 	ConfigManagerSuite // include all ConfigManager tests, and more..
 }
