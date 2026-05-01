@@ -352,7 +352,7 @@ func (cm *reconcilingConfigManager) getStaticConfigs() map[string][]integration.
 	for name, digests := range cm.staticConfigsByName.data {
 		configs := make([]integration.Config, 0, len(digests))
 		for _, digest := range digests {
-			if cfg, ok := cm.scheduledConfigs[digest]; ok {
+			if cfg, ok := cm.activeConfigs[digest]; ok {
 				configs = append(configs, cfg)
 			}
 		}
